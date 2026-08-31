@@ -1,0 +1,40 @@
+# ---------------------------------------------------------------------------
+# DATA: deny by default.
+#
+# Nothing carrying coordinates, hole IDs or grades gets committed on this
+# project -- raw tables AND derived files. The safe direction is the default:
+# every CSV is ignored, and the few aggregate-only outputs are re-admitted by
+# explicit exception below. A new data file is never staged by accident.
+# ---------------------------------------------------------------------------
+*.csv
+
+# Drop your own tables here -- never tracked.
+data/
+
+# Aggregate-only outputs: angles, counts, timings. No coordinates, no hole IDs.
+# These are the evidence behind docs/BAKEOFF.md, so they stay in the repo.
+!out/bakeoff_summary.csv
+!out/lsq_tuning.csv
+!out/structure_tensor_sweep.csv
+!out/contact_validation.csv
+
+# Notebook prototype: cell outputs carry hole IDs, UTM coordinates and
+# georeferenced figures from a second, non-public deposit. Kept local only.
+lva_notebook_v1.ipynb
+lva_notebook_v1.md
+lva_notebook_v1_files/
+
+# ---------------------------------------------------------------------------
+# Everything else
+# ---------------------------------------------------------------------------
+
+# Virtualenv -- rebuilt from requirements.txt, never committed (219 MB).
+.venv/
+
+# Python bytecode and test caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# OS noise
+.DS_Store
