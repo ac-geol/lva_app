@@ -1,4 +1,4 @@
-"""The three orientation estimators, and the one place their conventions differ.
+"""The two orientation estimators, and the one place their conventions differ.
 
   ############################################################################
   #  READ THIS BEFORE TOUCHING ANYTHING BELOW                                #
@@ -10,13 +10,9 @@
   #                        major eigenvector = long axis   = LINEATION       #
   #                        minor eigenvector = short axis  = POLE            #
   #                                                                          #
-  #    structure_tensor -- tensor is built from GRADIENT directions.         #
-  #                        major eigenvector = fastest grade change = POLE   #
-  #                        minor eigenvector = slowest grade change = LINEATION
-  #                                                                          #
-  #    edge_tensor      -- tensor is built from CONTINUITY directions.       #
-  #                        major eigenvector = dominant edge dir = LINEATION #
-  #                        minor eigenvector = POLE                          #
+  #    lsq_gradient     -- tensor is the outer product of a SOLVED gradient. #
+  #                        major eigenvector = gradient direction = POLE     #
+  #                        minor eigenvector = LINEATION                     #
   #                                                                          #
   #  Getting this backwards produces a result that is silently 90 degrees    #
   #  wrong and looks entirely plausible on a stereonet. Each estimator       #
@@ -25,14 +21,13 @@
   #  that declaration. tests/test_conventions.py locks all of it down with   #
   #  synthetic geometry of known answer.                                     #
   #                                                                          #
-  #  SECOND TRAP: the confidence metrics do not share a scale either.        #
-  #  For a PERFECT planar structure with isotropic neighbours the structure  #
-  #  tensor is analytically diag(1/5, 1/15, 1/15), so its planarity tops out #
-  #  at 2/3 -- while shape-PCA and the edge tensor top out at 1. Comparing   #
-  #  the raw numbers makes the structure tensor look a third worse than it   #
-  #  is. Every estimator therefore declares its ceilings, and the normalized #
-  #  planarity_norm / linearity_norm columns are what a bake-off compares.   #
-  #  Derivations are Monte-Carlo verified in tests/test_conventions.py.      #
+  #  SECOND TRAP: confidence metrics need not share a scale. An estimator    #
+  #  whose tensor cannot reach a perfect ratio declares its ceilings, and    #
+  #  the normalized planarity_norm / linearity_norm columns are what a       #
+  #  method comparison compares. Both estimators here top out at 1.0, so     #
+  #  the machinery is currently dormant -- it is retained because it is the  #
+  #  only thing that keeps a future estimator honest against these two.      #
+  #  See docs/METHOD_COMPARISON.md for the estimators this replaced.         #
   ############################################################################
 """
 from __future__ import annotations
@@ -46,12 +41,6 @@ from .geometry import normal_to_strike_dip, vector_to_trend_plunge
 from .neighbors import EdgeSet, accumulate_tensor
 
 
-# Analytic saturation values for the gradient structure tensor under isotropic
-# neighbour directions (see the module header, and the Monte-Carlo tests).
-#   perfect plane -> diag(1/5, 1/15, 1/15) -> (l1-l2)/l1 = 2/3
-#   perfect rod   -> diag(2/15, 2/15, 1/15) -> (l2-l3)/l1 = 1/2
-STRUCTURE_TENSOR_PLANARITY_CEILING = 2.0 / 3.0
-STRUCTURE_TENSOR_LINEARITY_CEILING = 1.0 / 2.0
 
 
 @dataclass
@@ -89,8 +78,9 @@ def shape_pca(edges: EdgeSet, coords: np.ndarray, scores: np.ndarray,
               hole_code: np.ndarray, cfg: dict) -> TensorField:
     """Weighted covariance of neighbour POSITIONS -- the notebook's estimator.
 
-    Measures the shape of the sampled point cloud. Kept as a cross-check; see
-    README section 2 for why it confuses drilling geometry with geology.
+    Measures the shape of the sampled point cloud. Kept as the reference
+    method: see README section 2 and docs/METHOD_COMPARISON.md for why it
+    reports the drill pattern rather than the geology.
     """
     n = edges.n_nodes
     W = np.bincount(edges.i, weights=edges.w, minlength=n)
@@ -109,70 +99,6 @@ def shape_pca(edges: EdgeSet, coords: np.ndarray, scores: np.ndarray,
                        name='shape_pca')
 
 
-def structure_tensor(edges: EdgeSet, coords: np.ndarray, scores: np.ndarray,
-                     hole_code: np.ndarray, cfg: dict) -> TensorField:
-    """Gradient structure tensor on the mineralization score.
-
-        delta_ij = (g_j - g_i) / d_ij
-        T_i = sum_j w_ij * delta_ij^2 * u_ij u_ij^T / sum_j w_ij
-
-    The major eigenvector is the direction of fastest grade change, i.e. the
-    POLE to the plane of continuity. Unlike shape-PCA the eigenvalue magnitude
-    is meaningful: a neighbourhood entirely inside ore, or entirely in waste,
-    has near-zero gradient and correctly reports "no structure here".
-    """
-    n = edges.n_nodes
-    delta = (scores[edges.j] - scores[edges.i]) / edges.d
-    scalar = edges.w * delta ** 2
-
-    W = np.bincount(edges.i, weights=edges.w, minlength=n)
-    Wsafe = np.where(W > 0, W, 1.0)
-    T = accumulate_tensor(edges, scalar, edges.u) / Wsafe[:, None, None]
-
-    valid = _validity(edges, hole_code, cfg)
-    # A flat neighbourhood carries no orientation information at all.
-    trace = np.trace(T, axis1=1, axis2=2)
-    floor = cfg.get('min_gradient_energy', 0.0)
-    if floor:
-        valid &= trace >= floor
-
-    return TensorField(T=T, pole_eigenvector='major', valid=valid,
-                       name='structure_tensor',
-                       planarity_ceiling=STRUCTURE_TENSOR_PLANARITY_CEILING,
-                       linearity_ceiling=STRUCTURE_TENSOR_LINEARITY_CEILING,
-                       aux={'gradient_energy': trace})
-
-
-def edge_tensor(edges: EdgeSet, coords: np.ndarray, scores: np.ndarray,
-                hole_code: np.ndarray, cfg: dict) -> TensorField:
-    """Orientation tensor of grade-similar edges.
-
-        T_i = sum_j w_ij * sim_ij * u_ij u_ij^T / sum_j w_ij * sim_ij
-
-    Edges are downweighted by grade *dissimilarity*, so what survives are the
-    directions along which mineralization actually persists. The major
-    eigenvector is that direction -- a LINEATION -- and the pole is the minor.
-
-    Without the similarity filter this degenerates into a measurement of the
-    drill pattern, which is exactly the failure mode being tested against.
-    """
-    n = edges.n_nodes
-    sigma_g = cfg.get('grade_sim_sigma') or (0.5 * float(np.nanstd(scores)))
-    sigma_g = max(sigma_g, 1e-9)
-
-    sim = np.exp(-((scores[edges.j] - scores[edges.i]) ** 2)
-                 / (2.0 * sigma_g ** 2))
-    scalar = edges.w * sim
-
-    W = np.bincount(edges.i, weights=scalar, minlength=n)
-    Wsafe = np.where(W > 0, W, 1.0)
-    T = accumulate_tensor(edges, scalar, edges.u) / Wsafe[:, None, None]
-
-    return TensorField(T=T, pole_eigenvector='minor',
-                       valid=_validity(edges, hole_code, cfg),
-                       name='edge_tensor', aux={'grade_sim_sigma': sigma_g})
-
-
 def lsq_gradient(edges: EdgeSet, coords: np.ndarray, scores: np.ndarray,
                  hole_code: np.ndarray, cfg: dict) -> TensorField:
     """Least-squares gradient reconstruction -- solve, do not average.
@@ -183,7 +109,7 @@ def lsq_gradient(edges: EdgeSet, coords: np.ndarray, scores: np.ndarray,
     directions exist at all is decided by the drill programme, so the direction
     of largest observed contrast is partly a statement about where the other
     holes are. On MacPass that costs ~50 degrees even on a synthetic, noise-free
-    lens (see docs/BAKEOFF.md).
+    lens (see docs/METHOD_COMPARISON.md).
 
     Solving instead of averaging removes it. Minimizing
 
@@ -258,8 +184,6 @@ def lsq_gradient(edges: EdgeSet, coords: np.ndarray, scores: np.ndarray,
 
 ESTIMATORS = {
     'shape_pca': shape_pca,
-    'structure_tensor': structure_tensor,
-    'edge_tensor': edge_tensor,
     'lsq_gradient': lsq_gradient,
 }
 

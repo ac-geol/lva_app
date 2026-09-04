@@ -1,6 +1,6 @@
 """Neighbourhood graph construction, shared by every estimator.
 
-All three estimators consume the *same* edge set, so a bake-off compares
+Both estimators consume the *same* edge set, so a method comparison compares
 estimators rather than accidentally comparing neighbourhoods.
 
 Edges never include self-pairs: a zero-length edge has no direction, and the
@@ -116,7 +116,7 @@ def build_edge_set(coords, scores, lengths, hole_code, cfg, *,
 
     use_score_weight=False strips all grade information from the weights,
     leaving distance and interval length. Running shape-PCA on that is the
-    geometry control: what the drill pattern alone would report.
+    drill-pattern reference: what the drill pattern alone would report.
     """
     i, j, d, u = build_edges(
         coords, cfg['radius_m'], hole_code,

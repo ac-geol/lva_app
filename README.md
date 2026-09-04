@@ -3,16 +3,17 @@
 Deriving local structural orientation (strike/dip, trend/plunge) from drillhole
 assay data alone — no oriented core, no televiewer.
 
-Status: **engine extracted and tested; bake-off complete; compositing built
-and off by default, not yet swept.**
-Full results and reasoning in [`docs/BAKEOFF.md`](docs/BAKEOFF.md).
+Status: **engine extracted and tested; method comparison complete and narrowed
+to two methods.**
+Full results and reasoning in
+[`docs/METHOD_COMPARISON.md`](docs/METHOD_COMPARISON.md).
 Running this on another machine: [`docs/SETUP.md`](docs/SETUP.md).
 
 ```bash
 uv venv --python 3.11 .venv
 uv pip install --python .venv/bin/python -r requirements.txt
-.venv/bin/python -m pytest tests/ -q          # 63 tests
-.venv/bin/python scripts/bakeoff.py --all-prospects
+.venv/bin/python -m pytest tests/ -q          # 57 tests
+.venv/bin/python scripts/compare_methods.py --all-prospects
 .venv/bin/python scripts/validate_contacts.py
 ```
 
@@ -23,41 +24,47 @@ uv pip install --python .venv/bin/python -r requirements.txt
 | path | what it is |
 |---|---|
 | `core/` | The engine. Pure numpy/scipy/pandas — no plotting, no file paths, no multiprocessing or numba, so it can run under Pyodide in a browser later without a rewrite. |
-| `core/estimators.py` | The four estimators and the single place their pole/lineation conventions are applied. |
+| `core/estimators.py` | The two methods (`lsq_gradient`, `shape_pca`) and the single place their pole/lineation conventions are applied. |
 | `core/validation.py` | Split-half stability and spatial coherence — how to judge a field with no measured structure. |
 | `core/compositing.py` | Downhole compositing to a longer support, off by default. See [`docs/COMPOSITING.md`](docs/COMPOSITING.md). |
 | `core/contacts.py` | Reference surfaces fitted from logged geology in `MPA_Interp`. |
 | `viz/`, `scripts/` | Stereonets and the runnable comparisons. Deliberately outside `core/`. |
-| `tests/` | 63 tests. Geometry conventions, desurvey against hand-worked trigonometry, and estimator recovery of synthetic fields with known answers. |
+| `tests/` | 57 tests. Geometry conventions, desurvey against hand-worked trigonometry, and method recovery of synthetic fields with known answers. |
 
 The orientation loop is gone — replaced by six `bincount` accumulations. The
-full property runs in about 0.1 s per estimator.
+full property runs in about 0.1 s per method.
 
 ---
 
-## 2. What the bake-off found
+## 2. What the method comparison found
 
-Every estimator ran over one prepared dataset and one shared neighbourhood
-graph. Two controls made it interpretable: a **geometry control** (shape-PCA on
-weights carrying no grade information — what the drill pattern alone reports),
-and **logged contact surfaces** from `MPA_Interp`, fitted one point per hole.
+Five candidates ran over one prepared dataset and one shared neighbourhood
+graph. Two references made it interpretable: a **drill-pattern reference**
+(shape-PCA on weights carrying no grade information — what the drill pattern
+alone reports), and **logged contact surfaces** from `MPA_Interp`, fitted one
+point per hole.
 
-| estimator | vs geometry control | vs logged contacts | split-half stability |
-|---|---|---|---|
-| geometry_control | — | 21.9° | 15.0° |
-| shape_pca | **2.0°** | 21.5° | 15.5° |
-| structure_tensor | 74.6° | **73.5°** | 51.2° |
-| edge_tensor | 12.6° | 24.7° | 22.1° |
-| **lsq_gradient** | 25.8° | **29.2°** (27.2° tuned) | 36.5° |
+| candidate | status | vs drill-pattern reference | vs logged contacts | split-half stability |
+|---|---|---|---|---|
+| drill-pattern reference | reference | — | 21.9° | 15.0° |
+| `shape_pca` | **ships** (as the null) | **2.0°** | 21.5° | 15.5° |
+| **`lsq_gradient`** | **ships** (default) | 25.8° | **29.2°** (27.2° tuned) | 36.5° |
+| `structure_tensor` | removed | 74.6° | 73.5° | 51.2° |
+| `edge_tensor` | removed | 12.6° | 24.7° | 22.1° |
 
-60° is the expectation for random axes.
+60° is the expectation for random axes. Two methods now ship; the two rejected
+candidates have been removed from the codebase, and
+[`docs/METHOD_COMPARISON.md`](docs/METHOD_COMPARISON.md) §2 records why, and
+where the evidence for the rejection now lives.
 
-**Shape-PCA is the drill pattern.** Its answer differs from the pure geometry
-control by 2.0° across the property and 0.28° at Tom West. Confirmed as
+**Shape-PCA is the drill pattern.** Its answer differs from the pure
+drill-pattern reference by 2.0° across the property and 0.28° at Tom West. Confirmed as
 predicted — though with a twist: it scores 21.5° against logged geology, better
 than anything else here. Holes are drilled across the interpreted lens, so it
 recovers *the geologist's prior*. Circular, not useless, and useless for the
-stated goal.
+stated goal — so it ships as the **null**, not as a competitor. If
+`lsq_gradient` ever collapses onto it, that is the signal it has stopped
+measuring rock.
 
 **The graph structure tensor failed.** It scored 73.5° against logged
 contacts — worse than random — while reporting high confidence. Its poles lie
@@ -69,7 +76,10 @@ estimates a gradient only when those directions are isotropic. Measured
 sampling anisotropy here is λ_min/λ_max ≈ 0.09–0.24.
 
 The previous recommendation in this README — that the structure tensor fixes
-the geometry bias "directly" — was wrong. It does not escape the bias.
+the geometry bias "directly" — was wrong. It does not escape the bias. It and
+`edge_tensor` have since been **removed from the codebase**; the finding that
+solving beats averaging is pinned by a test that builds the averaged tensor
+inline, so deleting the code did not delete the evidence.
 
 **What works is to solve rather than average.** Least-squares gradient
 reconstruction minimises `Σ w (δ_ij − ∇g·û_ij)²`, whose normal equations
@@ -98,20 +108,27 @@ and both are implemented.
 
 ## 4. Next steps
 
-1. **Reduce nugget at source.** The synthetic benchmark isolates noise as the
-   binding constraint (9° clean → 32° at noise 0.5), and the real data sits at
-   27°. Downhole compositing to a longer support *before* differencing is the
-   highest-value change. Post-hoc smoothing is not — it demonstrably destroys
-   the signal.
+1. **Fix `min_neighbors`, which counts the wrong unit.** The synthetic
+   benchmark isolates noise as the binding constraint (9° clean → 32° at noise
+   0.5), and the real data sits at 27°. Compositing to a longer support
+   *before* differencing is the lever; post-hoc smoothing is not — it
+   demonstrably destroys the signal.
 
-   **Compositing is now built and tested** (`core/compositing.py`, 25 tests),
-   and off by default. It has **not been swept yet**: `min_neighbors` is an
-   absolute sample count, so raising the composite length silently guts the
-   node set — at 8 m the field collapses to 8 nodes in 3 holes spanning 22 m.
-   The fix is to threshold on metres of neighbouring core rather than on sample
-   count, which is invariant under compositing. Full reasoning and the numbers
-   are in [`docs/COMPOSITING.md`](docs/COMPOSITING.md) §4. **Do that before
-   drawing any conclusion from a composited run.**
+   **Compositing itself is not this project's job.** Geologists already
+   composite in the software that holds their data, so this pipeline
+   recommends doing it upstream rather than competing with those tools.
+   `core/compositing.py` stays in the repo, off by default, as a reference
+   implementation.
+
+   That decision makes `min_neighbors` the blocking item, not an optional one:
+   accepting externally composited data means accepting **arbitrary, unknown
+   support**, and `min_neighbors` is an absolute sample count calibrated at
+   MacPass's ~1.27 m assays. Feed it 5 m composites and the node set silently
+   collapses — at 8 m, to 8 nodes in 3 holes spanning 22 m — with nothing in
+   the output revealing that the filter, not the data, caused it. The fix is
+   to threshold on metres of neighbouring core, which is invariant under
+   compositing. Numbers and reasoning in
+   [`docs/COMPOSITING.md`](docs/COMPOSITING.md) §4.
 2. **Domaining.** Leiden communities on the grade-similarity graph, so a
    neighbourhood never crosses a lens boundary. Currently `prospect_filter` is
    the only control and it is manual.
@@ -172,22 +189,25 @@ This repo carries **no drillhole data**. `.gitignore` is deny-by-default for
 data: every `*.csv` and `data/` is ignored, and only the aggregate-only tables
 below are re-admitted by explicit exception.
 
-- `out/` — bake-off figures and the aggregate summary tables
-  (`bakeoff_summary.csv`, `lsq_tuning.csv`, `structure_tensor_sweep.csv`,
+- `out/` — method-comparison figures and the aggregate summary tables
+  (`method_comparison_summary.csv`, `lsq_tuning.csv`,
   `contact_validation.csv`): angles, counts and timings only, no coordinates
-  and no hole IDs. These are the evidence behind `docs/BAKEOFF.md`.
+  and no hole IDs. These are the evidence behind
+  `docs/METHOD_COMPARISON.md`.
 - Everything else the scripts write — `orientations_*.csv`, `contacts.csv`,
   `contact_planes.csv` — carries coordinates or hole IDs and is ignored.
 
 **Bring your own data.** The scripts currently expect the four MacPass tables
 (`MPA_Samples_BD`, `MPA_Collar`, `MPA_Survey`, `MPA_Interp`) in the repo root;
 MacPass is public data, and the filenames are still hardcoded in
-`scripts/bakeoff.py`, `validate_contacts.py` and `tune_lsq.py`. `core/schema.py`
+`scripts/compare_methods.py`, `validate_contacts.py` and `tune_lsq.py`.
+`core/schema.py`
 resolves common column aliases and `describe_mapping()` previews the resolution
 for any CSV.
 
-The MacPass numbers quoted throughout this README and `docs/BAKEOFF.md` stand as
-a written record, but **they are not reproducible from a clean clone** — the
-tables they were computed from are not in the repo.
+The MacPass numbers quoted throughout this README and
+`docs/METHOD_COMPARISON.md` stand as a written record, but **they are not
+reproducible from a clean clone** — the tables they were computed from are not
+in the repo.
 
-The 63 tests are self-contained and need no data: `git clone` + `pytest` passes.
+The 57 tests are self-contained and need no data: `git clone` + `pytest` passes.

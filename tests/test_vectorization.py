@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 from core.config import make_cfg
-from core.estimators import shape_pca, structure_tensor, field_to_orientations
+from core.estimators import shape_pca, field_to_orientations
 from core.geometry import angular_difference
 from core.neighbors import EdgeSet, build_edge_set, build_edges, edge_weights
 
@@ -56,26 +56,6 @@ def test_shape_pca_matches_the_per_point_loop():
         assert got == pytest.approx(evals, rel=1e-9, abs=1e-12)
         checked += 1
     assert checked > 100
-
-
-def test_structure_tensor_matches_a_naive_loop():
-    coords, scores, lengths, hole_code = _synthetic()
-    cfg = make_cfg(radius_m=80.0, min_neighbors=10, min_holes=3,
-                   distance_sigma_m=60.0)
-    edges = build_edge_set(coords, scores, lengths, hole_code, cfg)
-    tf = structure_tensor(edges, coords, scores, hole_code, cfg)
-
-    ref = np.zeros_like(tf.T)
-    wsum = np.zeros(edges.n_nodes)
-    for e in range(edges.n_edges):
-        i, j = edges.i[e], edges.j[e]
-        delta = (scores[j] - scores[i]) / edges.d[e]
-        u = edges.u[e]
-        ref[i] += edges.w[e] * delta ** 2 * np.outer(u, u)
-        wsum[i] += edges.w[e]
-    ref /= np.where(wsum > 0, wsum, 1.0)[:, None, None]
-
-    assert tf.T == pytest.approx(ref, rel=1e-9, abs=1e-14)
 
 
 def test_edges_exclude_self_and_same_hole():

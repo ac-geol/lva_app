@@ -1,19 +1,29 @@
 # Downhole compositing
 
-Status: **built, tested, and off by default. Not yet swept.**
-`composite_length_m: None` reproduces the pre-compositing pipeline exactly —
-verified byte-for-byte against `out/bakeoff_summary.csv`, every scientific
-column identical.
+Status: **built, tested, off by default — and not the recommended path.**
 
-Before turning it up, read §4. There is a known interaction with
-`min_neighbors` that will produce a confident, wrong answer if you sweep
-composite length without addressing it.
+**Composite upstream.** Geologists already composite in the software that holds
+their data (Leapfrog, Datamine, Vulcan), and this project does not intend to
+compete with those tools. `core/compositing.py` stays as a reference
+implementation and as the place the length-conservation property is pinned by
+tests; the planned composite-length sweep has been dropped.
+
+`composite_length_m: None` reproduces the pre-compositing pipeline exactly —
+verified byte-for-byte against `out/method_comparison_summary.csv`, every
+scientific column identical.
+
+**§4 matters more now, not less.** Compositing upstream means this pipeline
+receives data of arbitrary, unknown support, and `min_neighbors` is an absolute
+sample count calibrated at MacPass's ~1.27 m assays. Feeding it composites made
+elsewhere hits exactly the collapse described there — with nothing in the output
+revealing that the filter, not the data, caused it. Read §4 before running this
+pipeline on any composited table, wherever the compositing was done.
 
 ---
 
 ## 1. Why
 
-Every estimator here works from finite differences of the score between holes,
+Both methods here work from finite differences of the score between holes,
 
 ```
 delta_ij = (s_j - s_i) / d_ij
@@ -34,15 +44,15 @@ mean 1.27 m   median 1.34 m   modal 1.5 m (9430) and 1.0 m (5930)
 We are differencing **1.3 m supports across ~100 m baselines**. At that support
 in an Ag-Pb-Zn system an individual assay is mostly nugget.
 
-The synthetic benchmark in `docs/BAKEOFF.md` is what makes this the priority
+The synthetic benchmark in `docs/METHOD_COMPARISON.md` is what makes this the priority
 rather than a guess: `lsq_gradient` scores **9.1° on a clean lens and 32° at
-noise 0.5**, and the real data sits at 27.2°. The estimator is already near its
-noise-limited ceiling, and no amount of estimator work moves a number set by
+noise 0.5**, and the real data sits at 27.2°. The method is already near its
+noise-limited ceiling, and no amount of method work moves a number set by
 `sigma_eps`.
 
 ## 2. Why this is not the smoothing that failed
 
-Superficially both are "average the data first", and `docs/BAKEOFF.md` §4 shows
+Superficially both are "average the data first", and `docs/METHOD_COMPARISON.md` §4 shows
 smoothing degrading the contact error from 27.2° to 72.6° — worse than random —
 while every internal metric improved. The distinction is mechanical, not a
 matter of degree:
@@ -174,7 +184,7 @@ spatial extent beside every error figure.
 - L ∈ {none, 2, 3, 5, 8, 12}, scored on **external metrics only**: contact error
   from `scripts/validate_contacts.py`, plus split-half stability. Internal
   metrics reward the artifact — that is the standing lesson of §4 of
-  `docs/BAKEOFF.md`.
+  `docs/METHOD_COMPARISON.md`.
 - Run the **synthetic lens** too. Truth is known, geometry is fixed, noise is a
   dial, and there is no active-set confound in the way. If compositing works
   mechanically, the noise-0.5 case should move from 32° toward the clean 9.1°.

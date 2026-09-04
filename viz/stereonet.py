@@ -34,9 +34,13 @@ def draw_frame(ax, title=None, subtitle=None):
     if title:
         ax.set_title(title, fontsize=9.5, pad=10)
     if subtitle:
-        # xlabel rather than a free text: matplotlib then reserves the space,
-        # so the caption cannot collide with the row below it.
-        ax.set_xlabel(subtitle, fontsize=7.5, color='0.35', labelpad=6)
+        # Drawn INSIDE the axes, in the margin between the circle (r=sqrt2) and
+        # the axis limit. set_aspect('equal') shrinks this axes within whatever
+        # slot the layout engine gives it, and an xlabel placed outside the box
+        # then lands unpredictably -- at three panels it collided with the title
+        # of the row below. A caption in data coordinates moves with the axes.
+        ax.text(0, -1.57, subtitle, ha='center', va='center', fontsize=7.5,
+                color='0.35')
 
 
 def density_contour(ax, trend, plunge, *, gridsize=180, sigma=0.09, levels=8,

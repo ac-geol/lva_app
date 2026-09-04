@@ -8,7 +8,7 @@ so each node's noise enters the fit as sigma_eps / d. The baseline d is already
 as long as the geology allows (radius_m = 120), which leaves sigma_eps as the
 only remaining lever -- and MacPass assays sit at ~1.3 m support, where an
 individual interval is mostly nugget. Averaging to a longer support attacks the
-noise at source. See docs/BAKEOFF.md: the synthetic benchmark puts the estimator
+noise at source. See docs/METHOD_COMPARISON.md: the synthetic benchmark puts the method
 at 9 degrees clean and 32 degrees at noise 0.5, and the real data at 27 degrees.
 
 This is NOT the neighbourhood smoothing that `smoothing.smooth_scores` performs

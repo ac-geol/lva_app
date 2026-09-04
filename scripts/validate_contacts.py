@@ -1,4 +1,7 @@
-"""Judge each estimator against surfaces derived from logged geology.
+"""Judge each LVA method against surfaces derived from logged geology.
+
+The external check behind docs/METHOD_COMPARISON.md -- the one metric here that
+is not computed from the same graph it judges.
 
 Reference surfaces come from MPA_Interp: one contact point per hole per named
 stratigraphic unit, plane-fitted. Not oriented core, but real, independent of
@@ -22,8 +25,11 @@ from core.neighbors import build_edge_set
 from core.pipeline import prepare
 from core.schema import COLS
 
-ORDER = ['geometry_control', 'shape_pca', 'structure_tensor', 'edge_tensor',
-         'lsq_gradient']
+# Same panel set as scripts/compare_methods.py: two methods, then the
+# drill-pattern reference (shape-PCA on grade-blind weights).
+METHODS = ['shape_pca', 'lsq_gradient']
+REFERENCE = 'geometry_control'
+PANELS = METHODS + [REFERENCE]
 
 
 def main():
@@ -57,11 +63,11 @@ def main():
     ungraded = build_edge_set(ds.coords, ds.scores, ds.lengths, ds.hole_code,
                               cfg, use_score_weight=False)
 
-    print("\n=== estimator vs logged contact surfaces ===")
+    print("\n=== method vs logged contact surfaces ===")
     summary = []
-    for name in ORDER:
-        edges = ungraded if name == 'geometry_control' else graded
-        fn = shape_pca if name == 'geometry_control' else ESTIMATORS[name]
+    for name in PANELS:
+        edges = ungraded if name == REFERENCE else graded
+        fn = shape_pca if name == REFERENCE else ESTIMATORS[name]
         tf = fn(edges, ds.coords, ds.scores, ds.hole_code, cfg)
         out = field_to_orientations(tf)
         out = pd.concat([ds.active[['mid_x', 'mid_y', 'mid_z']].reset_index(drop=True),
@@ -71,7 +77,7 @@ def main():
         cmp = compare_to_planes(out, planes, contacts)
         if cmp.empty:
             continue
-        cmp.insert(0, 'estimator', name)
+        cmp.insert(0, 'method', name)
         summary.append(cmp)
 
     allcmp = pd.concat(summary, ignore_index=True)
@@ -79,16 +85,16 @@ def main():
 
     pivot = allcmp.pivot_table(index=['code', 'boundary', 'n_holes', 'n_nodes',
                                       'ref_strike', 'ref_dip'],
-                               columns='estimator', values='median_err_deg')
-    pivot = pivot[[c for c in ORDER if c in pivot.columns]]
+                               columns='method', values='median_err_deg')
+    pivot = pivot[[c for c in PANELS if c in pivot.columns]]
     print(pivot.round(1).to_string())
 
     print("\n=== overall (node-weighted median error vs reference, degrees) ===")
     agg = (allcmp.assign(wt=lambda d: d['n_nodes'])
-           .groupby('estimator')
+           .groupby('method')
            .apply(lambda g: np.average(g['median_err_deg'], weights=g['wt']),
                   include_groups=False)
-           .reindex(ORDER))
+           .reindex(PANELS))
     print(agg.round(1).to_string())
     print("\nreference: 60 deg is the expectation for random axes.")
 

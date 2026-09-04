@@ -9,12 +9,9 @@ import numpy as np
 import pytest
 
 from core.config import make_cfg
-from core.estimators import (STRUCTURE_TENSOR_LINEARITY_CEILING,
-                             STRUCTURE_TENSOR_PLANARITY_CEILING, TensorField,
-                             edge_tensor, field_to_orientations, shape_pca,
-                             structure_tensor)
+from core.estimators import TensorField, field_to_orientations, shape_pca
 from core.geometry import angular_difference, orientation_tensor, unitize
-from core.neighbors import EdgeSet, build_edge_set
+from core.neighbors import EdgeSet, accumulate_tensor, build_edge_set
 
 TRUE_POLE = unitize(np.array([np.sin(np.radians(35)) * np.sin(np.radians(120)),
                               np.sin(np.radians(35)) * np.cos(np.radians(120)),
@@ -111,87 +108,27 @@ def test_declared_convention_is_validated():
 # Each estimator against a synthetic field with a known answer.
 # --------------------------------------------------------------------------
 
-def test_structure_tensor_recovers_the_pole_of_a_layered_grade_field():
-    """Grade varies ONLY along TRUE_POLE, so the gradient is TRUE_POLE.
-
-    Wavelength is kept long relative to the search radius: a finite-difference
-    estimator aliases once the field turns over inside one neighbourhood.
-    """
-    coords, hole_code = _grid()
-    scores = np.sin(2 * np.pi * (coords @ TRUE_POLE) / 200.0)
-    lengths = np.full(len(coords), 2.0)
-    cfg = _cfg()
-
-    edges = build_edge_set(coords, scores, lengths, hole_code, cfg)
-    tf = structure_tensor(edges, coords, scores, hole_code, cfg)
-    out = field_to_orientations(tf)
-    out = out.loc[out['valid']]
-
-    poles = out[['pole_vec_x', 'pole_vec_y', 'pole_vec_z']].to_numpy()
-    err = angular_difference(poles, np.broadcast_to(TRUE_POLE, poles.shape))
-
-    # Per-node scatter is limited by neighbour-count noise; the aggregate is not.
-    assert np.median(err) < 12.0
-    _, evecs = orientation_tensor(poles)
-    assert angular_difference(evecs[:, 0], TRUE_POLE)[0] < 3.0
-    assert out['planarity_norm'].median() > 0.85
-
-
-def test_structure_tensor_planarity_ceiling_is_two_thirds():
-    """A perfect plane cannot push this estimator's raw planarity above 2/3.
-
-    Isotropic neighbours + a linear grade field give T = diag(1/5, 1/15, 1/15)
-    analytically. Comparing this raw against shape-PCA (which reaches 1.0) is
-    the mistake the _norm columns exist to prevent.
-    """
-    rng = np.random.default_rng(11)
-    u = unitize(rng.normal(size=(120000, 3)))
-    grad = np.array([0.0, 0.0, 1.0])
-    T = np.einsum('n,ni,nj->ij', (u @ grad) ** 2, u, u) / len(u)
-    ev = np.sort(np.linalg.eigvalsh(T))[::-1]
-    assert ev == pytest.approx([1 / 5, 1 / 15, 1 / 15], abs=5e-3)
-    assert (ev[0] - ev[1]) / ev[0] == pytest.approx(
-        STRUCTURE_TENSOR_PLANARITY_CEILING, abs=0.02)
-
-
-def test_structure_tensor_linearity_ceiling_is_one_half():
-    """A perfect rod: the gradient rotates within a plane across the ball."""
-    rng = np.random.default_rng(12)
-    th = rng.uniform(0, 2 * np.pi, 120000)
-    m = np.column_stack([np.cos(th), np.sin(th), np.zeros_like(th)])
-    T = (1 / 15) * np.eye(3) + (2 / 15) * np.einsum('ni,nj->ij', m, m) / len(m)
-    ev = np.sort(np.linalg.eigvalsh(T))[::-1]
-    assert (ev[1] - ev[2]) / ev[0] == pytest.approx(
-        STRUCTURE_TENSOR_LINEARITY_CEILING, abs=0.02)
-    assert (ev[0] - ev[1]) / ev[0] == pytest.approx(0.0, abs=0.02)
-
-
 def test_normalized_metrics_are_on_a_common_scale():
-    """Two estimators, same perfect structure -> comparable _norm values."""
+    """Two estimators, same perfect structure -> comparable _norm values.
+
+    Both shipped estimators top out at 1.0, so this machinery is dormant today.
+    It is what keeps a future estimator whose tensor cannot reach a perfect
+    eigenvalue ratio comparable against them, so it stays under test. The 2/3
+    and 1/2 ceilings used here are the analytic saturation values of a gradient
+    structure tensor under isotropic neighbours -- see docs/METHOD_COMPARISON.md.
+    """
     tf, a, _, _ = _diag_field('major', TRUE_POLE, ratio=(1 / 5, 1 / 15, 1 / 15))
-    tf.planarity_ceiling = STRUCTURE_TENSOR_PLANARITY_CEILING
-    tf.linearity_ceiling = STRUCTURE_TENSOR_LINEARITY_CEILING
-    st = field_to_orientations(tf).iloc[0]
+    tf.planarity_ceiling = 2.0 / 3.0
+    tf.linearity_ceiling = 1.0 / 2.0
+    capped = field_to_orientations(tf).iloc[0]
 
     pca, *_ = _diag_field('minor', TRUE_POLE, ratio=(1.0, 1.0, 0.0))
     sp = field_to_orientations(pca).iloc[0]
 
-    assert st['planarity'] == pytest.approx(2 / 3, abs=1e-6)     # raw differs
+    assert capped['planarity'] == pytest.approx(2 / 3, abs=1e-6)   # raw differs
     assert sp['planarity'] == pytest.approx(1.0, abs=1e-6)
-    assert st['planarity_norm'] == pytest.approx(1.0, abs=1e-6)  # normalized agrees
+    assert capped['planarity_norm'] == pytest.approx(1.0, abs=1e-6)  # norm agrees
     assert sp['planarity_norm'] == pytest.approx(1.0, abs=1e-6)
-
-
-def test_structure_tensor_reports_no_structure_in_a_uniform_field():
-    """Constant grade -> zero gradient energy -> nothing to orient."""
-    coords, hole_code = _grid()
-    scores = np.full(len(coords), 1.5)
-    lengths = np.full(len(coords), 2.0)
-    cfg = _cfg()
-
-    edges = build_edge_set(coords, scores, lengths, hole_code, cfg)
-    tf = structure_tensor(edges, coords, scores, hole_code, cfg)
-    assert np.nanmax(tf.aux['gradient_energy']) < 1e-12
 
 
 def test_shape_pca_recovers_the_normal_of_a_planar_point_cloud():
@@ -218,30 +155,6 @@ def test_shape_pca_recovers_the_normal_of_a_planar_point_cloud():
     assert np.median(err) < 10.0
 
 
-def test_edge_tensor_recovers_a_lineation():
-    """Grade constant along Z, varying in X and Y -> a vertical rod."""
-    coords, hole_code = _grid()
-    axis = np.array([0.0, 0.0, 1.0])
-    scores = (np.sin(2 * np.pi * coords[:, 0] / 50.0)
-              * np.sin(2 * np.pi * coords[:, 1] / 50.0))
-    lengths = np.full(len(coords), 2.0)
-    cfg = _cfg(grade_sim_sigma=0.05)
-
-    edges = build_edge_set(coords, scores, lengths, hole_code, cfg)
-    tf = edge_tensor(edges, coords, scores, hole_code, cfg)
-    out = field_to_orientations(tf)
-    out = out.loc[out['valid']]
-
-    lines = out[['line_vec_x', 'line_vec_y', 'line_vec_z']].to_numpy()
-    err = angular_difference(lines, np.broadcast_to(axis, lines.shape))
-
-    # Nodes sitting on a nodal line of the grade field have no local gradient
-    # and legitimately return noise, so judge the population, not every node.
-    assert np.median(err) < 30.0
-    _, evecs = orientation_tensor(lines)
-    assert angular_difference(evecs[:, 0], axis)[0] < 5.0
-
-
 # --------------------------------------------------------------------------
 # Least-squares gradient reconstruction.
 # --------------------------------------------------------------------------
@@ -265,12 +178,15 @@ def test_lsq_gradient_recovers_the_pole_of_a_layered_field():
     assert out['gradient_r2'].median() > 0.8
 
 
-def test_lsq_gradient_beats_the_structure_tensor_on_anisotropic_sampling():
+def test_lsq_gradient_beats_naive_tensor_averaging_on_anisotropic_sampling():
     """The whole reason this estimator exists.
 
     Sampling is restricted to a narrow cone of directions -- the drillhole
-    situation. Averaging u u^T inherits that bias; solving for the gradient
-    inverts it away.
+    situation. AVERAGING w * delta^2 * u u^T inherits that bias; SOLVING for
+    the gradient inverts it away. The averaged tensor is built inline here
+    rather than imported: it is the method being beaten, not a shipped
+    estimator, and this test is the record of why it is not shipped.
+    See docs/METHOD_COMPARISON.md.
     """
     from core.estimators import lsq_gradient
 
@@ -289,6 +205,16 @@ def test_lsq_gradient_beats_the_structure_tensor_on_anisotropic_sampling():
 
     edges = build_edge_set(coords, scores, lengths, hole_code, cfg)
 
+    def averaged_gradient_tensor():
+        """T_i = sum_j w delta^2 u u^T / sum_j w -- average, do not solve."""
+        delta = (scores[edges.j] - scores[edges.i]) / edges.d
+        wsum = np.bincount(edges.i, weights=edges.w, minlength=edges.n_nodes)
+        T = (accumulate_tensor(edges, edges.w * delta ** 2, edges.u)
+             / np.where(wsum > 0, wsum, 1.0)[:, None, None])
+        valid = edges.neighbor_counts() >= cfg['min_neighbors']
+        return TensorField(T=T, pole_eigenvector='major', valid=valid,
+                           name='averaged')
+
     def med_err(tf):
         o = field_to_orientations(tf)
         o = o.loc[o['valid']]
@@ -296,11 +222,11 @@ def test_lsq_gradient_beats_the_structure_tensor_on_anisotropic_sampling():
         return float(np.median(
             angular_difference(p, np.broadcast_to(true_pole, p.shape))))
 
-    err_st = med_err(structure_tensor(edges, coords, scores, hole_code, cfg))
+    err_avg = med_err(averaged_gradient_tensor())
     err_ls = med_err(lsq_gradient(edges, coords, scores, hole_code, cfg))
 
     assert err_ls < 5.0
-    assert err_ls < err_st / 2.0
+    assert err_ls < err_avg / 2.0
 
 
 def test_lsq_gradient_reports_degenerate_sampling():

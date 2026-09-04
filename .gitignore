@@ -12,10 +12,9 @@
 data/
 
 # Aggregate-only outputs: angles, counts, timings. No coordinates, no hole IDs.
-# These are the evidence behind docs/BAKEOFF.md, so they stay in the repo.
-!out/bakeoff_summary.csv
+# These are the evidence behind docs/METHOD_COMPARISON.md, so they stay.
+!out/method_comparison_summary.csv
 !out/lsq_tuning.csv
-!out/structure_tensor_sweep.csv
 !out/contact_validation.csv
 
 # Notebook prototype: cell outputs carry hole IDs, UTM coordinates and

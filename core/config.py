@@ -47,16 +47,8 @@ DEFAULT_CFG = {
     'decluster_by_hole': True,
 
     # ---- estimator ----
-    # 'shape_pca' | 'structure_tensor' | 'edge_tensor' | 'lsq_gradient'
+    # 'lsq_gradient' (default) | 'shape_pca'
     'estimator': 'lsq_gradient',
-
-    # structure_tensor: drop nodes whose neighbourhood is too flat to orient.
-    # 0.0 disables the filter (the honest default until calibrated per dataset).
-    'min_gradient_energy': 0.0,
-
-    # edge_tensor: score difference at which an edge is downweighted by 1/sqrt(e).
-    # None => 0.5 * std(active scores).
-    'grade_sim_sigma': None,
 
     # lsq_gradient: ridge on the normal equations, relative to each node's own
     # tensor magnitude. Large enough to survive a degenerate drill pattern,

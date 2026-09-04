@@ -1,12 +1,12 @@
 # Setup — running this on another machine
 
 The repo carries **no drillhole data** — code, tests, docs and aggregate result
-tables only. The 63 tests are self-contained, so `git clone` + `pytest` proves
+tables only. The 57 tests are self-contained, so `git clone` + `pytest` proves
 the engine works with nothing else to fetch. Budget about five minutes.
 
-To reproduce the bake-off numbers you supply your own tables — see §5.1. The
-MacPass results quoted in `docs/BAKEOFF.md` stand as a written record but are
-**not reproducible from a clean clone**.
+To reproduce the method-comparison numbers you supply your own tables — see
+§5.1. The MacPass results quoted in `docs/METHOD_COMPARISON.md` stand as a
+written record but are **not reproducible from a clean clone**.
 
 **Windows, macOS and Linux all work.** `core/` uses no OS-specific code — no
 `os` calls, no `subprocess`, no multiprocessing, no POSIX-only modules — every
@@ -85,14 +85,10 @@ git branch -a
 
 | branch | what it is |
 |---|---|
-| `main` | The finished bake-off. The engine, 38 tests, and every result written up in `docs/BAKEOFF.md`. |
-| `feature/downhole-compositing` | `main` plus downhole compositing: `core/compositing.py`, 25 more tests, and `docs/COMPOSITING.md`. Compositing is **off by default** (`composite_length_m: None`), so this branch reproduces `main`'s numbers exactly unless you turn it on. |
+| `main` | Everything. The engine, 57 tests, downhole compositing (off by default), and every result written up in `docs/METHOD_COMPARISON.md`. |
 
-`main` is checked out by default. To get the compositing work:
-
-```bash
-git checkout feature/downhole-compositing
-```
+`main` is the only branch — the former `feature/downhole-compositing` was
+merged into it and is gone. Nothing else to check out.
 
 ---
 
@@ -155,7 +151,7 @@ is what makes `import core` resolve.
 .venv/bin/python -m pytest tests/ -q              # macOS / Linux
 ```
 
-Expect **38 passed** on `main`, **63 passed** on `feature/downhole-compositing`.
+Expect **57 passed**.
 
 **The first run takes ~18 seconds; every run after that is ~2.** That is Python
 compiling bytecode on the cold clone, not a hang. Verified from a clean clone
@@ -204,7 +200,7 @@ It returns one row per internal column — `internal`, `source`, `required`,
 
 Put the files wherever you like — `data/` is gitignored for exactly this — then
 point the scripts at them. **The filenames are currently hardcoded** in
-`scripts/bakeoff.py`, `validate_contacts.py`, `tune_lsq.py` and `sweep.py`;
+`scripts/compare_methods.py`, `validate_contacts.py` and `tune_lsq.py`;
 edit the constants at the top of each, or see `docs/TODO.md` for the pending
 `--data-dir` flag.
 
@@ -212,24 +208,25 @@ Whatever you run, results carrying coordinates or hole IDs
 (`out/orientations_*.csv`, `out/contacts.csv`, `out/contact_planes.csv`) are
 gitignored by default. Keep it that way — see `docs/TODO.md` §2.
 
-### The bake-off — every estimator, whole property
+### The method comparison — both methods, whole property
 
 ```bash
-.venv/bin/python scripts/bakeoff.py                    # ~13 s
+.venv/bin/python scripts/compare_methods.py            # ~13 s
 ```
 
 Prints the comparison table and writes to `out/`:
-`bakeoff_all.png` (stereonets), `bakeoff_summary.csv`, and one
-`orientations_all_<estimator>.csv` per estimator (~2 MB each, gitignored).
+`method_comparison_all.png` (stereonets), `method_comparison_summary.csv`, and
+one `orientations_all_<method>.csv` per panel (~2 MB each, gitignored).
 
-The number to read is `vs_control_deg` — how far each estimator's poles sit
-from the geometry control. Small means it is measuring the drill pattern.
+The number to read is `vs_reference_deg` — how far each method's poles sit from
+the drill-pattern reference. Small means it is measuring the drill pattern, not
+the rock.
 
 ### One prospect, or all of them separately
 
 ```bash
-.venv/bin/python scripts/bakeoff.py --prospect "Tom West"
-.venv/bin/python scripts/bakeoff.py --all-prospects    # ~20 s
+.venv/bin/python scripts/compare_methods.py --prospect "Tom West"
+.venv/bin/python scripts/compare_methods.py --all-prospects   # ~20 s
 ```
 
 ### Contact validation — the external check
@@ -245,19 +242,20 @@ coordinates and hole IDs and are gitignored; only `contact_validation.csv` is
 aggregate-only and tracked.
 
 **This is the only metric that can falsify the field.** Internal metrics
-(stereonet tightness, spatial coherence, the estimator's own confidence) all
-reward the drilling artifact — see `docs/BAKEOFF.md` §4.
+(stereonet tightness, spatial coherence, the method's own confidence) all
+reward the drilling artifact — see `docs/METHOD_COMPARISON.md` §4.
 
 ### Tuning sweeps
 
 ```bash
 .venv/bin/python scripts/tune_lsq.py                   # ridge / conditioning
-.venv/bin/python scripts/sweep.py                      # neighbourhood + smoothing
 ```
 
-### Trying compositing (feature branch only)
+### Trying compositing
 
-Compositing is off unless asked for. In Python:
+Compositing is off unless asked for, and **the recommendation is to composite
+upstream** in whatever software already holds your data rather than here. The
+built-in implementation stays as a reference. In Python:
 
 ```python
 from core.config import make_cfg
@@ -287,10 +285,10 @@ holes. That is a known limitation with a known fix, not a result.
 | `core/config.py` | Every tunable, with the reasoning for each default. Start here. |
 | `scripts/` | Runnable comparisons. Deliberately outside `core/`. |
 | `viz/` | Stereonets. |
-| `tests/` | The 38 (63) tests. |
+| `tests/` | The 57 tests. |
 | `out/` | Figures and result tables. |
-| `docs/BAKEOFF.md` | What the bake-off found and why. The main writeup. |
-| `docs/COMPOSITING.md` | Compositing, and the `min_neighbors` limitation. Feature branch. |
+| `docs/METHOD_COMPARISON.md` | What the method comparison found and why. The main writeup. |
+| `docs/COMPOSITING.md` | Compositing, and the `min_neighbors` limitation. |
 | `docs/TODO.md` | Standing rules and open work. |
 
 ---
@@ -326,6 +324,6 @@ use uv (§3.1, which needs no system Python) or install Python 3.11 with
 **pandas or numpy version errors** — the pins in `requirements.txt` are exact.
 pandas 3.x changed enough that older 2.x versions are not a safe substitute.
 
-**A bake-off run seems slow** — `--all-prospects` takes about 20 seconds and
-prints only as each prospect finishes. The estimators themselves are ~0.1 s
-each; the time goes on desurvey and figure rendering.
+**A comparison run seems slow** — `--all-prospects` takes about 20 seconds and
+prints only as each prospect finishes. The methods themselves are ~0.1 s each;
+the time goes on desurvey and figure rendering.

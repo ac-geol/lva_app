@@ -3,7 +3,7 @@
 Judged on three numbers that can disagree, and must all be reported:
   contact_err  -- median angle to logged reference surfaces (external truth)
   stability    -- split-half over holes (does the answer survive redrilling?)
-  vs_control   -- distance from the pure drill-geometry answer (is it geology?)
+  vs_reference -- distance from the pure drill-geometry answer (is it geology?)
 
 Smoothing is the trap: it drives spatial coherence toward zero while leaving
 stability flat, so it manufactures the appearance of structure. Only contact
@@ -103,7 +103,7 @@ def main():
                      'contact_err': err,
                      'stability': stability(ds.coords, ds.scores, ds.lengths,
                                             ds.hole_code, cfg, iters, alpha),
-                     'vs_control': vs_ctrl,
+                     'vs_reference': vs_ctrl,
                      'r2_med': float(out.loc[out['valid'], 'gradient_r2'].median()),
                      'cond_med': float(out.loc[out['valid'],
                                                'sampling_conditioning'].median())})
