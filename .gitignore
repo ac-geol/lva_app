@@ -37,3 +37,6 @@ __pycache__/
 
 # OS noise
 .DS_Store
+
+# Synthetic demo outputs -- regenerate with scripts/compare_methods.py --synthetic
+out/synthetic_*

@@ -44,6 +44,7 @@ from core.ingest import load_tables
 from core.neighbors import build_edge_set
 from core.pipeline import prepare
 from core.schema import COLS
+from core.synthetic import example_cfg, make_example_deposit, orientation_error
 from core.validation import (coherence_null, neighbor_agreement,
                              split_half_stability)
 
@@ -131,8 +132,19 @@ def run_all(ds, cfg) -> dict[str, pd.DataFrame]:
     return results
 
 
+def _true_errors(results, active) -> dict:
+    """Median angle from the known answer, when running on synthetic data."""
+    if 'true_pole_x' not in active.columns:
+        return {}
+    out = {}
+    for name, df in results.items():
+        if len(df):
+            out[name] = float(np.median(orientation_error(df, active)))
+    return out
+
+
 def summarize(results: dict[str, pd.DataFrame], n_active: int,
-              diag: dict | None = None) -> pd.DataFrame:
+              diag: dict | None = None, truth: dict | None = None) -> pd.DataFrame:
     """One row per method, then the reference. Higher S1/C = tighter poles."""
     reference = results[REFERENCE].set_index('node')
     rows = []
@@ -164,6 +176,7 @@ def summarize(results: dict[str, pd.DataFrame], n_active: int,
             'S1_all': w_all['S1'], 'C_all': w_all['C'], 'K_all': w_all['K'],
             'S1_conf': w_conf['S1'], 'C_conf': w_conf['C'],
             'vs_reference_deg': vs_reference,
+            **({'true_err_deg': (truth or {}).get(name, np.nan)} if truth else {}),
             **(diag or {}).get(name, {}),
         })
     return pd.DataFrame(rows)
@@ -200,7 +213,8 @@ def plot(results: dict[str, pd.DataFrame], title: str, path: Path):
     plt.close(fig)
 
 
-def compare_methods(label: str, cfg: dict, tables) -> pd.DataFrame:
+def compare_methods(label: str, cfg: dict, tables,
+                    prefix: str = 'method_comparison') -> pd.DataFrame:
     samples, collars, surveys = tables
     ds = prepare(samples, collars, surveys, cfg)
     if len(ds.active) < cfg['min_neighbors']:
@@ -219,7 +233,8 @@ def compare_methods(label: str, cfg: dict, tables) -> pd.DataFrame:
         return pd.DataFrame()
 
     diag = _extra_diagnostics(ds, cfg, results)
-    summary = summarize(results, len(ds.active), diag)
+    truth = _true_errors(results, ds.active)
+    summary = summarize(results, len(ds.active), diag, truth)
     summary.insert(0, 'subset', label)
 
     slug = label.lower().replace(' ', '_')
@@ -227,7 +242,7 @@ def compare_methods(label: str, cfg: dict, tables) -> pd.DataFrame:
     plot(results, f"LVA method comparison -- {label}   "
                   f"(r={cfg['radius_m']:.0f} m, min_n={cfg['min_neighbors']}, "
                   f"active={len(ds.active):,})",
-         OUT / f'method_comparison_{slug}.png')
+         OUT / f'{prefix}_{slug}.png')
     for name, df in results.items():
         df.to_csv(OUT / f'orientations_{slug}_{name}.csv', index=False)
     return summary
@@ -241,11 +256,26 @@ def main():
     ap.add_argument('--all-prospects', action='store_true')
     ap.add_argument('--radius', type=float, default=120.0)
     ap.add_argument('--min-neighbors', type=int, default=100)
+    ap.add_argument('--synthetic', action='store_true',
+                    help='run on a generated folded Cu-Au deposit with a known '
+                         'answer instead of your own tables; adds true_err_deg')
+    ap.add_argument('--seed', type=int, default=0,
+                    help='seed for --synthetic')
     args = ap.parse_args()
 
-    cfg = make_cfg(radius_m=args.radius, min_neighbors=args.min_neighbors)
-    samples, collars, surveys = load_tables(
-        DATA['samples'], DATA['collars'], DATA['surveys'], cfg)
+    if args.synthetic:
+        cfg = example_cfg(radius_m=args.radius, min_neighbors=args.min_neighbors)
+        dep = make_example_deposit(seed=args.seed)
+        samples, collars, surveys = load_tables(dep.samples, dep.collars,
+                                                dep.surveys, cfg)
+        print(f"synthetic deposit (seed {args.seed}): "
+              f"a plunging antiform, Cu-Au, with per-sample ground truth")
+        print("  NOTE: this validates the mathematics, not the geology -- "
+              "see core/synthetic.py")
+    else:
+        cfg = make_cfg(radius_m=args.radius, min_neighbors=args.min_neighbors)
+        samples, collars, surveys = load_tables(
+            DATA['samples'], DATA['collars'], DATA['surveys'], cfg)
     print(f"loaded: {len(samples):,} samples / {len(collars):,} collars / "
           f"{len(surveys):,} survey rows")
 
@@ -258,14 +288,17 @@ def main():
                   .groupby(COLS['prospect']).size().sort_values(ascending=False))
         subsets += [(p, p) for p in counts[counts >= 1500].index]
 
+    prefix = 'synthetic' if args.synthetic else 'method_comparison'
+
     frames = []
     for label, prospect in subsets:
         print(f"\n=== {label} ===")
-        sub_cfg = make_cfg(radius_m=args.radius, min_neighbors=args.min_neighbors,
-                           prospect_filter=prospect)
+        mk = example_cfg if args.synthetic else make_cfg
+        sub_cfg = mk(radius_m=args.radius, min_neighbors=args.min_neighbors,
+                     prospect_filter=prospect)
         from core.ingest import apply_filters
         tables = apply_filters(samples, collars, surveys, collars, sub_cfg)
-        summary = compare_methods(label, sub_cfg, tables)
+        summary = compare_methods(label, sub_cfg, tables, prefix=prefix)
         if not summary.empty:
             fmt = lambda v: f"{v:8.3f}"
             print("\n  -- field & stereonet --")
@@ -275,15 +308,18 @@ def main():
                   .to_string(index=False, float_format=fmt))
             print("\n  -- is it geology? (vs_reference_deg near 0 = measuring "
                   "the drill pattern; ~60 deg = no signal) --")
-            print(summary[['method', 'role', 'vs_reference_deg', 'coherence_deg',
-                           'coherence_null_deg', 'stability_deg', 'n_stability']]
-                  .to_string(index=False, float_format=fmt))
+            cols = ['method', 'role', 'vs_reference_deg']
+            if 'true_err_deg' in summary.columns:
+                cols.append('true_err_deg')
+            cols += ['coherence_deg', 'coherence_null_deg', 'stability_deg',
+                     'n_stability']
+            print(summary[cols].to_string(index=False, float_format=fmt))
             frames.append(summary)
 
     if frames:
         allsum = pd.concat(frames, ignore_index=True)
-        allsum.to_csv(OUT / 'method_comparison_summary.csv', index=False)
-        print(f"\nwrote {OUT/'method_comparison_summary.csv'} and per-subset figures")
+        allsum.to_csv(OUT / f'{prefix}_summary.csv', index=False)
+        print(f"\nwrote {OUT}/{prefix}_summary.csv and per-subset figures")
 
 
 if __name__ == '__main__':
