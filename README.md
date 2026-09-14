@@ -12,7 +12,7 @@ Running this on another machine: [`docs/SETUP.md`](docs/SETUP.md).
 ```bash
 uv venv --python 3.11 .venv
 uv pip install --python .venv/bin/python -r requirements.txt
-.venv/bin/python -m pytest tests/ -q          # 57 tests
+.venv/bin/python -m pytest tests/ -q          # 88 tests
 .venv/bin/python scripts/compare_methods.py --all-prospects
 .venv/bin/python scripts/validate_contacts.py
 ```
@@ -25,11 +25,14 @@ uv pip install --python .venv/bin/python -r requirements.txt
 |---|---|
 | `core/` | The engine. Pure numpy/scipy/pandas — no plotting, no file paths, no multiprocessing or numba, so it can run under Pyodide in a browser later without a rewrite. |
 | `core/estimators.py` | The two methods (`lsq_gradient`, `shape_pca`) and the single place their pole/lineation conventions are applied. |
+| `core/ingest.py`, `core/pipeline.py` | Two ways in: the three raw tables (`load_tables` + `prepare`), or one table of already-desurveyed points as Leapfrog and Datamine export them (`load_points` + `prepare_points`). The second skips desurveying and is what the browser app uses; a test pins the two routes to bit-identical output. |
+| `core/export.py` | Orientations in Leapfrog's conventions — dip, dip azimuth, pitch. The single place that conversion happens. Dip and dip azimuth are verified; **pitch is not** — [`docs/LEAPFROG_CHECK.md`](docs/LEAPFROG_CHECK.md) is the procedure to settle it. |
 | `core/validation.py` | Split-half stability and spatial coherence — how to judge a field with no measured structure. |
 | `core/compositing.py` | Downhole compositing to a longer support, off by default. See [`docs/COMPOSITING.md`](docs/COMPOSITING.md). |
 | `core/contacts.py` | Reference surfaces fitted from logged geology in `MPA_Interp`. |
 | `viz/`, `scripts/` | Stereonets and the runnable comparisons. Deliberately outside `core/`. |
-| `tests/` | 57 tests. Geometry conventions, desurvey against hand-worked trigonometry, and method recovery of synthetic fields with known answers. |
+| `app/` | The browser build: `core/` under Pyodide in a Web Worker, no server and no network at run time. See [`app/README.md`](app/README.md). Verified against the CLI to 3.5e-10. |
+| `tests/` | 88 tests. Geometry conventions, desurvey against hand-worked trigonometry, and method recovery of synthetic fields with known answers. |
 
 The orientation loop is gone — replaced by six `bincount` accumulations. The
 full property runs in about 0.1 s per method.
@@ -47,8 +50,8 @@ point per hole.
 | candidate | status | vs drill-pattern reference | vs logged contacts | split-half stability |
 |---|---|---|---|---|
 | drill-pattern reference | reference | — | 21.9° | 15.0° |
-| `shape_pca` | **ships** (as the null) | **2.0°** | 21.5° | 15.5° |
-| **`lsq_gradient`** | **ships** (default) | 25.8° | **29.2°** (27.2° tuned) | 36.5° |
+| **`shape_pca`** | **ships** (default) | **2.0°** | 21.5° | 15.5° |
+| `lsq_gradient` | ships | 25.8° | **29.2°** (27.2° tuned) | 36.5° |
 | `structure_tensor` | removed | 74.6° | 73.5° | 51.2° |
 | `edge_tensor` | removed | 12.6° | 24.7° | 22.1° |
 
@@ -210,4 +213,4 @@ The MacPass numbers quoted throughout this README and
 reproducible from a clean clone** — the tables they were computed from are not
 in the repo.
 
-The 57 tests are self-contained and need no data: `git clone` + `pytest` passes.
+The 88 tests are self-contained and need no data: `git clone` + `pytest` passes.

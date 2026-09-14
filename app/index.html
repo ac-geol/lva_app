@@ -1,0 +1,1138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LVA — orientations from drillholes</title>
+<script type="importmap">
+{ "imports": { "three": "./three/three.module.js" } }
+</script>
+<style>
+/* System fonts only: this app has to work with no internet, so a web font
+   would be a blank page on a site network. */
+:root {
+  --ground:#eef1f3; --surface:#fff; --surface-2:#f5f8f9; --raise:#e7edf0;
+  --ink:#17222b; --ink-2:#46565f; --ink-3:#71808a;
+  --rule:#d4dbe0; --rule-2:#b7c4cb;
+  --accent:#1f6f8b; --accent-ink:#fff; --accent-soft:#e2eef2;
+  --bronze:#83653a; --bronze-soft:#f2eadd;
+  --ok:#3c7a55; --ok-soft:#e4f0e8;
+  --crit:#a03a29;
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground:#111920; --surface:#18212a; --surface-2:#1d2832; --raise:#233039;
+    --ink:#e3eaef; --ink-2:#a8b6c0; --ink-3:#7a8994;
+    --rule:#2a3742; --rule-2:#3b4b57;
+    --accent:#5fb2cb; --accent-ink:#0d1a20; --accent-soft:#10303b;
+    --bronze:#c6a16a; --bronze-soft:#2a2318;
+    --ok:#6fb58a; --ok-soft:#16291f;
+    --crit:#d57c6c;
+  }
+}
+* { box-sizing: border-box; }
+body { margin:0; background:var(--ground); color:var(--ink); font-family:var(--sans); font-size:14px; line-height:1.55; }
+
+/* ---- chrome ---- */
+header {
+  position:sticky; top:0; z-index:10; display:flex; align-items:center; gap:16px;
+  padding:12px 24px; background:var(--surface); border-bottom:1px solid var(--rule);
+}
+.brand { font-weight:700; letter-spacing:-.01em; font-size:15px; }
+.brand span { font-weight:400; color:var(--ink-3); margin-left:10px; font-size:13px; }
+.pill {
+  margin-left:auto; font-family:var(--mono); font-size:11px; padding:4px 11px;
+  border-radius:11px; background:var(--raise); color:var(--ink-2); white-space:nowrap;
+}
+.pill.busy { background:var(--accent-soft); color:var(--accent); }
+.pill.ok   { background:var(--ok-soft); color:var(--ok); }
+.pill.fail { background:var(--bronze-soft); color:var(--crit); }
+
+main { max-width:940px; margin:0 auto; padding:28px 24px 96px; }
+
+/* ---- steps ---- */
+.step { margin-bottom:10px; background:var(--surface); border:1px solid var(--rule); }
+.step[aria-disabled="true"] { opacity:.42; pointer-events:none; }
+.step-head { display:flex; align-items:baseline; gap:14px; padding:15px 20px; border-bottom:1px solid var(--rule); }
+.step[aria-disabled="true"] .step-head { border-bottom:0; }
+.step-n {
+  font-family:var(--mono); font-size:11px; color:var(--accent);
+  border:1px solid var(--accent); border-radius:50%; width:21px; height:21px;
+  display:grid; place-items:center; flex:none; align-self:center;
+}
+.step h2 { margin:0; font-size:15px; font-weight:650; letter-spacing:-.005em; }
+.step-note { margin-left:auto; font-size:12px; color:var(--ink-3); font-family:var(--mono); }
+.step-body { padding:18px 20px; }
+.step[aria-disabled="true"] .step-body { display:none; }
+
+/* ---- drop zone ---- */
+.drop {
+  border:1.5px dashed var(--rule-2); padding:26px; text-align:center; cursor:pointer;
+  transition:border-color .12s, background .12s;
+}
+.drop:hover, .drop.over { border-color:var(--accent); background:var(--accent-soft); }
+.drop strong { display:block; font-size:14px; margin-bottom:3px; }
+.drop small { color:var(--ink-3); }
+.or { text-align:center; margin:14px 0 0; font-size:13px; color:var(--ink-3); }
+
+/* ---- buttons ---- */
+button {
+  font:inherit; font-weight:550; padding:8px 16px; border:1px solid var(--rule-2);
+  background:var(--surface-2); color:var(--ink); cursor:pointer;
+}
+button:hover:not(:disabled) { border-color:var(--accent); color:var(--accent); }
+button:disabled { opacity:.45; cursor:default; }
+button.primary { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+button.primary:hover:not(:disabled) { filter:brightness(1.08); color:var(--accent-ink); }
+button.link { border:0; background:none; padding:0; color:var(--accent); text-decoration:underline; }
+:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+
+/* ---- tables ---- */
+table { border-collapse:collapse; width:100%; }
+th {
+  text-align:left; font-family:var(--mono); font-size:10px; letter-spacing:.11em;
+  text-transform:uppercase; color:var(--ink-3); font-weight:500;
+  padding:0 14px 7px 0; border-bottom:1px solid var(--rule-2);
+}
+td { padding:7px 14px 7px 0; border-bottom:1px solid var(--rule); vertical-align:middle; }
+tr:last-child td { border-bottom:0; }
+td.num, th.num { text-align:right; padding-right:0; font-family:var(--mono); font-variant-numeric:tabular-nums; }
+select { font:inherit; font-size:13px; padding:4px 7px; background:var(--surface-2); color:var(--ink); border:1px solid var(--rule-2); max-width:100%; }
+.internal { font-family:var(--mono); font-size:12px; }
+.req { color:var(--crit); font-size:11px; margin-left:5px; }
+.badge { font-family:var(--mono); font-size:10px; padding:2px 7px; border-radius:3px; }
+.badge.ok { background:var(--ok-soft); color:var(--ok); }
+.badge.miss { background:var(--bronze-soft); color:var(--crit); }
+.badge.opt { color:var(--ink-3); }
+
+/* ---- assay picker ---- */
+.assay { display:grid; gap:1px; background:var(--rule); border:1px solid var(--rule); }
+.assay label {
+  display:grid; grid-template-columns:22px 1fr auto auto; gap:14px; align-items:baseline;
+  padding:9px 13px; background:var(--surface); cursor:pointer;
+}
+.assay label:hover { background:var(--surface-2); }
+.assay input { margin:0; align-self:center; }
+.assay .nm { font-family:var(--mono); font-size:13px; }
+.assay .st { font-family:var(--mono); font-size:11px; color:var(--ink-3); font-variant-numeric:tabular-nums; }
+
+/* ---- summary ---- */
+.facts { display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:var(--rule); border:1px solid var(--rule); margin-bottom:16px; }
+@media (max-width:620px) { .facts { grid-template-columns:repeat(2,1fr); } }
+.fact { background:var(--surface); padding:12px 14px; }
+.fact dt { font-family:var(--mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-3); margin:0 0 4px; }
+.fact dd { margin:0; font-size:19px; font-weight:600; font-variant-numeric:tabular-nums; letter-spacing:-.015em; }
+.fact dd small { font-size:12px; font-weight:400; color:var(--ink-3); margin-left:2px; }
+
+.note { border-left:3px solid var(--accent); background:var(--accent-soft); padding:12px 16px; margin:0 0 12px; font-size:13px; }
+.note.warn { border-left-color:var(--bronze); background:var(--bronze-soft); }
+.note b { display:block; margin-bottom:2px; }
+.note p { margin:0; color:var(--ink-2); }
+.note.warn p { color:var(--ink-2); }
+
+.controls { display:grid; grid-template-columns:repeat(2,1fr); gap:18px 26px; }
+@media (max-width:620px) { .controls { grid-template-columns:1fr; } }
+.ctl label { display:block; font-weight:600; font-size:13px; margin-bottom:5px; }
+.ctl .row { display:flex; align-items:center; gap:10px; }
+.ctl input[type=number], .ctl select { font:inherit; font-size:13px; padding:5px 8px; background:var(--surface-2); color:var(--ink); border:1px solid var(--rule-2); width:104px; }
+.ctl select { width:100%; }
+.ctl input[type=range] { flex:1; accent-color:var(--accent); min-width:0; }
+.ctl .unit { font-family:var(--mono); font-size:12px; color:var(--ink-3); }
+.ctl .say { display:block; margin-top:5px; font-size:12px; color:var(--ink-3); min-height:1.4em; }
+.ctl .say b { color:var(--ink-2); font-weight:600; font-variant-numeric:tabular-nums; }
+.ctl.wide { grid-column:1 / -1; }
+.ctl .check { display:flex; align-items:center; gap:8px; font-weight:400; font-size:13px; }
+.ctl .check input { accent-color:var(--accent); }
+/* ---- stereonets ---- */
+.nets { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin:0 0 18px; }
+@media (max-width:620px) { .nets { grid-template-columns:1fr; } }
+.net { text-align:center; }
+.net h3 { margin:0 0 2px; font-size:13px; font-weight:650; }
+.net .sub { font-size:12px; color:var(--ink-3); margin:0 0 8px; min-height:2.6em; }
+.net canvas { width:100%; max-width:300px; height:auto; display:block; margin:0 auto; }
+.net .cap { font-family:var(--mono); font-size:11px; color:var(--ink-3); margin-top:6px; }
+.scale { display:flex; align-items:center; justify-content:center; gap:9px; margin:0 0 18px;
+         font-family:var(--mono); font-size:10.5px; color:var(--ink-3); letter-spacing:.06em; }
+.scale .bar { width:132px; height:8px; border:1px solid var(--rule); }
+.netopts { display:flex; gap:16px; justify-content:center; margin:0 0 14px; font-size:12.5px; color:var(--ink-2); }
+.netopts label { display:flex; align-items:center; gap:6px; cursor:pointer; }
+.netopts input { accent-color:var(--accent); }
+
+/* ---- diagnostics ---- */
+.diag { display:grid; gap:1px; background:var(--rule); border:1px solid var(--rule); margin:0 0 16px; }
+.diag-row { display:grid; grid-template-columns:186px 92px 1fr; gap:16px; align-items:baseline;
+            background:var(--surface); padding:11px 14px; }
+@media (max-width:620px) { .diag-row { grid-template-columns:1fr; gap:2px; } }
+.diag-row .nm { font-weight:600; font-size:13px; }
+.diag-row .val { font-family:var(--mono); font-size:15px; font-variant-numeric:tabular-nums; }
+.diag-row .say { font-size:12.5px; color:var(--ink-2); }
+.diag-row .verdict { font-family:var(--mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase; }
+.v-good { color:var(--ok); } .v-weak { color:var(--bronze); } .v-none { color:var(--crit); }
+
+/* ---- 3D view ---- */
+#view-wrap { position:relative; border:1px solid var(--rule); background:var(--surface-2); margin:0 0 12px; }
+#view { width:100%; display:block; }
+.viewbar { display:flex; flex-wrap:wrap; gap:14px 20px; align-items:center; margin:0 0 12px; font-size:12.5px; }
+.viewbar .grp { display:flex; align-items:center; gap:7px; }
+.viewbar label { color:var(--ink-3); }
+.viewbar select { font:inherit; font-size:12.5px; padding:3px 6px; background:var(--surface-2); color:var(--ink); border:1px solid var(--rule-2); }
+.viewbar input[type=range] { width:104px; accent-color:var(--accent); }
+.viewbar .seg { display:flex; border:1px solid var(--rule-2); }
+.viewbar .seg button { border:0; border-right:1px solid var(--rule-2); padding:4px 10px; font-size:12px; font-weight:500; background:var(--surface-2); }
+.viewbar .seg button:last-child { border-right:0; }
+.viewbar .seg button.on { background:var(--accent); color:var(--accent-ink); }
+.viewbar .chk { display:flex; align-items:center; gap:6px; color:var(--ink-2); cursor:pointer; }
+.viewbar .chk input { accent-color:var(--accent); }
+.viewlegend { display:flex; align-items:center; gap:9px; font-family:var(--mono); font-size:10.5px; color:var(--ink-3); letter-spacing:.06em; }
+.viewlegend .bar { width:110px; height:8px; border:1px solid var(--rule); }
+
+/* ---- reference panel ---- */
+details.help { border:1px solid var(--rule); background:var(--surface); margin:0 0 10px; }
+details.help > summary { padding:13px 20px; cursor:pointer; font-weight:650; font-size:14px; list-style:none; display:flex; align-items:center; gap:10px; }
+details.help > summary::-webkit-details-marker { display:none; }
+details.help > summary::before { content:'?'; width:19px; height:19px; flex:none; border:1px solid var(--accent); color:var(--accent); border-radius:50%; display:grid; place-items:center; font-size:11px; font-family:var(--mono); }
+details.help[open] > summary { border-bottom:1px solid var(--rule); }
+.help-body { padding:16px 20px 20px; }
+.help-body h4 { margin:18px 0 6px; font-size:13px; font-weight:650; }
+.help-body h4:first-child { margin-top:0; }
+.help-body p { margin:0 0 10px; max-width:70ch; color:var(--ink-2); font-size:13.5px; }
+.help-body dl { display:grid; grid-template-columns:auto 1fr; gap:5px 16px; margin:0 0 10px; font-size:13px; }
+.help-body dt { font-family:var(--mono); font-size:12px; color:var(--ink); }
+.help-body dd { margin:0; color:var(--ink-2); }
+.help-body .flag { border-left:3px solid var(--bronze); background:var(--bronze-soft); padding:10px 14px; margin:12px 0 0; font-size:13px; }
+
+.actions { display:flex; gap:10px; align-items:center; margin-top:16px; }
+.hint { font-size:12px; color:var(--ink-3); }
+pre { font-family:var(--mono); font-size:11.5px; background:var(--surface-2); border:1px solid var(--rule); padding:11px 13px; overflow-x:auto; margin:0; }
+.err { color:var(--crit); font-size:13px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">LVA <span>orientations from drillholes</span></div>
+  <div class="pill" id="pill">Starting…</div>
+</header>
+
+<main>
+
+  <section class="step" id="s1" aria-disabled="true">
+    <div class="step-head"><div class="step-n">1</div><h2>Data</h2><div class="step-note" id="s1-note"></div></div>
+    <div class="step-body">
+      <div class="drop" id="drop">
+        <strong>Drop a desurveyed drillhole CSV here</strong>
+        <small>One row per sample interval, with X / Y / Z already on it — a Leapfrog or Datamine export</small>
+      </div>
+      <input type="file" id="file" accept=".csv,text/csv" hidden>
+      <p class="or">or <button class="link" id="use-sample">use the bundled example</button></p>
+      <p class="err" id="s1-err" hidden></p>
+    </div>
+  </section>
+
+  <section class="step" id="s2" aria-disabled="true">
+    <div class="step-head"><div class="step-n">2</div><h2>Columns</h2><div class="step-note" id="s2-note"></div></div>
+    <div class="step-body">
+      <p class="hint" style="margin:0 0 12px">Checked against the first rows of your file. Change any row the guess got wrong.</p>
+      <table><thead><tr><th>Needs</th><th>Column in your file</th><th></th></tr></thead>
+        <tbody id="map-rows"></tbody></table>
+    </div>
+  </section>
+
+  <section class="step" id="s3" aria-disabled="true">
+    <div class="step-head"><div class="step-n">3</div><h2>Assay column</h2><div class="step-note" id="s3-note"></div></div>
+    <div class="step-body">
+      <p class="hint" style="margin:0 0 12px">The element the orientation field is estimated from. One column.
+        <span id="assay-scope"></span></p>
+      <div class="assay" id="assay-rows"></div>
+      <div class="actions">
+        <button class="primary" id="check" disabled>Check the data</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="step" id="s4" aria-disabled="true">
+    <div class="step-head"><div class="step-n">4</div><h2>Check</h2><div class="step-note" id="s4-note"></div></div>
+    <div class="step-body">
+      <dl class="facts" id="facts"></dl>
+      <div id="notes"></div>
+    </div>
+  </section>
+
+  <section class="step" id="s5" aria-disabled="true">
+    <div class="step-head"><div class="step-n">5</div><h2>Settings</h2><div class="step-note" id="s5-note"></div></div>
+    <div class="step-body">
+      <div class="controls" id="controls"></div>
+      <div class="actions">
+        <button class="primary" id="run">Estimate orientations</button>
+        <button id="reset">Reset to defaults</button>
+        <button id="save-settings">Save settings</button>
+        <button id="load-settings">Load settings</button>
+        <input type="file" id="settings-file" accept=".json,application/json" hidden>
+        <span class="hint" id="run-hint"></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="step" id="s6" aria-disabled="true">
+    <div class="step-head"><div class="step-n">6</div><h2>Result</h2><div class="step-note" id="s6-note"></div></div>
+    <div class="step-body">
+      <dl class="facts" id="result-facts"></dl>
+      <div id="result-notes"></div>
+
+      <div id="view-block" hidden>
+        <p class="hint" style="margin:0 0 10px">Each disc is one estimated plane, drawn at the sample
+          it belongs to, with the drillholes behind it. Drag to rotate, scroll to zoom. The question
+          this answers is whether the discs follow the mineralisation or lie flat in the drill sections
+          — a stereonet cannot tell you that.</p>
+        <div class="viewbar">
+          <div class="grp seg" id="view-presets">
+            <button data-view="oblique" class="on">Oblique</button>
+            <button data-view="plan">Plan</button>
+            <button data-view="north">Look north</button>
+            <button data-view="east">Look east</button>
+          </div>
+          <div class="grp"><label for="v-color">Colour by</label>
+            <select id="v-color">
+              <option value="grade">Grade</option>
+              <option value="dip">Dip</option>
+              <option value="planarity">Confidence</option>
+              <option value="reference">Difference from drill pattern</option>
+            </select></div>
+          <div class="grp"><label for="v-show">Show</label>
+            <select id="v-show">
+              <option value="1">Every sample</option>
+              <option value="5" selected>1 in 5</option>
+              <option value="10">1 in 10</option>
+              <option value="25">1 in 25</option>
+            </select></div>
+          <div class="grp"><label for="v-size">Disc size</label><input type="range" id="v-size" min="3" max="30" step="1" value="9"></div>
+          <div class="grp"><label for="v-section">Section</label><input type="range" id="v-section" min="0.05" max="1" step="0.01" value="1"></div>
+          <div class="grp"><label for="v-exag">Vertical ×</label><input type="range" id="v-exag" min="1" max="4" step="0.1" value="1"></div>
+          <label class="chk"><input type="checkbox" id="v-traces" checked> Drillholes</label>
+          <div class="grp viewlegend"><span id="v-lo">LOW</span><span class="bar" id="v-bar"></span><span id="v-hi">HIGH</span></div>
+        </div>
+        <div id="view-wrap"><canvas id="view"></canvas></div>
+        <p class="hint" id="view-note" style="margin:0 0 22px"></p>
+      </div>
+
+      <div id="net-block" hidden>
+        <div class="netopts">
+          <label><input type="checkbox" id="net-density" checked> Density</label>
+          <label><input type="checkbox" id="net-points"> Individual poles</label>
+        </div>
+        <div class="nets">
+          <div class="net">
+            <h3 id="net-a-title">Your result</h3>
+            <p class="sub">Poles to the estimated planes. A tight cluster means one dominant orientation.</p>
+            <canvas id="net-a" width="600" height="600"></canvas>
+            <p class="cap" id="net-a-cap"></p>
+          </div>
+          <div class="net">
+            <h3>Drill pattern alone</h3>
+            <p class="sub">The same calculation with the grades stripped out — what the drilling by itself would report.</p>
+            <canvas id="net-b" width="600" height="600"></canvas>
+            <p class="cap" id="net-b-cap"></p>
+          </div>
+        </div>
+        <div class="scale">
+          <span>SPARSE</span><span class="bar" id="scale-bar"></span><span>DENSE</span>
+        </div>
+        <div class="diag" id="diag"></div>
+      </div>
+      <details class="help">
+        <summary>What is in the export, and what to trust</summary>
+        <div class="help-body">
+          <h4>Angles</h4>
+          <dl>
+            <dt>Dip</dt><dd>0–90°, measured down from horizontal.</dd>
+            <dt>DipAzimuth</dt><dd>0–360°, the true down-dip direction measured clockwise from north. Leapfrog's convention, verified.</dd>
+            <dt>Pitch</dt><dd>0–180°, the rake of the long axis within the plane, measured from the strike direction. <b>Not yet verified against Leapfrog</b> — see below.</dd>
+          </dl>
+
+          <h4>Everything else</h4>
+          <dl>
+            <dt>Planarity</dt><dd>0–1. How clearly a single plane is defined at that point. Low values are weakly constrained.</dd>
+            <dt>Linearity</dt><dd>0–1. Whether there is a real long axis in the plane. Pitch is only written where this is above 0.05.</dd>
+            <dt>LocalN, LocalHoles</dt><dd>How many neighbouring samples, and how many separate holes, the estimate was built from.</dd>
+            <dt>VsReferenceDeg</dt><dd>Degrees between this orientation and what the drill pattern alone would report. Travels with the file so a decision made from it can be audited later.</dd>
+            <dt>Estimator</dt><dd>Which method produced the row.</dd>
+          </dl>
+
+          <h4>Before you code grades from this</h4>
+          <p>Dip and dip azimuth are settled. <b>Pitch is provisional</b>: the direction it is
+            measured in has not been confirmed against a Leapfrog round trip, and a reversed
+            pitch gives an ellipsoid that is correctly oriented as a plane but whose long axis
+            points the wrong way inside it. Run <code>scripts/make_convention_check.py</code> and
+            follow <code>docs/LEAPFROG_CHECK.md</code> once, then this note can go.</p>
+          <div class="flag">Orientations within one search radius of the edge of your exported
+            volume lean toward that cut face, because the neighbours beyond it are not in the
+            file. Trim the rim, or export a wider margin next time.</div>
+        </div>
+      </details>
+
+      <div class="actions">
+        <button class="primary" id="download" disabled>Download Leapfrog CSV</button>
+        <button id="download-settings" disabled>Download settings</button>
+        <span class="hint" id="dl-hint"></span>
+      </div>
+      <p class="hint" style="margin:16px 0 6px">First rows of the export</p>
+      <pre id="export-head"></pre>
+    </div>
+  </section>
+
+</main>
+
+<script>
+const worker = new Worker('worker.js', { type: 'module' });
+const pending = new Map();
+let seq = 0;
+
+const $ = (id) => document.getElementById(id);
+const fmt = (n, d = 0) => n === null || n === undefined ? '—'
+  : n.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
+
+// The engine's internal names are not for reading. The CSV keeps them, since
+// that column is machine-facing; everything on screen uses these.
+const METHOD_NAME = { shape_pca: 'Shape PCA', lsq_gradient: 'LSQ gradient' };
+const methodName = (k) => METHOD_NAME[k] || k;
+
+const state = { csv: null, fileName: null, columns: {}, assay: null,
+                loaded: null, result: null, exportCsv: null,
+                defaults: null, cfg: {} };
+
+// Plain-language labels for engine settings, with the units the geologist
+// thinks in. Order here is the order on screen.
+const CONTROLS = [
+  { key:'estimator', label:'Method', kind:'select',
+    options:{ shape_pca:'Shape PCA  (recommended)',
+              lsq_gradient:'LSQ gradient' },
+    hint:{ shape_pca:'<b>Principal component analysis</b> on the positions of the high-grade samples '
+                   + 'around each point: the plane is the one their covariance ellipsoid lies in. '
+                   + 'More accurate of the two on test data — but where holes were drilled across the '
+                   + 'interpreted zone the sample cloud carries that geometry, so it can report the '
+                   + 'drill pattern rather than the rock. Check it against the reference stereonet.',
+           lsq_gradient:'<b>Least-squares gradient reconstruction.</b> Solves for the local grade '
+                      + 'gradient rather than averaging over it, which inverts the sampling-direction '
+                      + 'tensor away and so removes the drill geometry by construction. The more '
+                      + 'independent of the two, but less accurate on test data.' } },
+  { key:'active_score_quantile', label:'Grade cutoff', kind:'range', wide:true,
+    min:0, max:0.99, step:0.01 },
+  { key:'radius_m', label:'Search radius', kind:'number', unit:'m', min:1, step:5 },
+  { key:'min_neighbors', label:'Minimum neighbouring samples', kind:'number', min:1, step:5 },
+  { key:'min_holes', label:'Minimum contributing holes', kind:'number', min:1, step:1 },
+  { key:'distance_sigma_m', label:'Distance weighting', kind:'number', unit:'m', min:1, step:5 },
+  { key:'log_transform_score', label:'Grade handling', kind:'check',
+    text:'Log-transform grades before scoring' },
+];
+
+function pill(text, cls) { $('pill').textContent = text; $('pill').className = 'pill ' + (cls || ''); }
+function enable(id, on) { $(id).setAttribute('aria-disabled', on ? 'false' : 'true'); }
+function note(id, text) { $(id).textContent = text || ''; }
+
+function ask(action, payload) {
+  const id = ++seq;
+  return new Promise((resolve, reject) => {
+    pending.set(id, { resolve, reject });
+    worker.postMessage({ id, action, payload });
+  });
+}
+
+worker.onerror = (e) => {
+  e.preventDefault();
+  pill('Failed to start', 'fail');
+  $('s1-err').hidden = false;
+  $('s1-err').textContent = 'The engine did not start: ' + (e.message || 'worker script failed to load')
+    + '. If this is a fresh copy, run: python scripts/build_app.py --pyodide';
+};
+
+worker.onmessage = (event) => {
+  const msg = event.data;
+  if (msg.type === 'status') { pill(msg.message + '…', 'busy'); return; }
+  if (msg.type === 'boot_error') { pill('Failed to start', 'fail'); $('s1-err').hidden = false; $('s1-err').textContent = msg.error; return; }
+  if (msg.type === 'ready') {
+    state.defaults = msg.versions.defaults;
+    state.cfg = { ...msg.versions.defaults };
+    state.versions = { python: msg.versions.python, numpy: msg.versions.numpy,
+                       pandas: msg.versions.pandas, scipy: msg.versions.scipy };
+    pill(`Ready · Python ${msg.versions.python}`, 'ok');
+    enable('s1', true);
+    return;
+  }
+  const slot = pending.get(msg.id);
+  if (!slot) return;
+  pending.delete(msg.id);
+  msg.ok ? slot.resolve(msg) : slot.reject(msg);
+};
+
+function fail(err) {
+  pill('Error', 'fail');
+  console.error(err.traceback || err.error || err);
+  return `${err.error_type || 'Error'}: ${err.error || err}`;
+}
+
+// ---- step 1: file in -----------------------------------------------------
+
+function readFile(file) {
+  const reader = new FileReader();
+  reader.onload = () => acceptCsv(reader.result, file.name);
+  reader.readAsText(file);
+}
+
+$('drop').onclick = () => $('file').click();
+$('file').onchange = (e) => e.target.files[0] && readFile(e.target.files[0]);
+['dragenter', 'dragover'].forEach((ev) => $('drop').addEventListener(ev, (e) => {
+  e.preventDefault(); $('drop').classList.add('over');
+}));
+['dragleave', 'drop'].forEach((ev) => $('drop').addEventListener(ev, (e) => {
+  e.preventDefault(); $('drop').classList.remove('over');
+}));
+$('drop').addEventListener('drop', (e) => {
+  const file = e.dataTransfer.files[0];
+  if (file) readFile(file);
+});
+
+$('use-sample').onclick = async () => {
+  pill('Loading example…', 'busy');
+  const csv = await (await fetch('sample_synthetic.csv')).text();
+  acceptCsv(csv, 'sample_synthetic.csv (folded Cu-Au deposit, known answer)');
+};
+
+async function acceptCsv(csv, name) {
+  state.csv = csv;
+  state.fileName = name;
+  state.columns = {};
+  state.assay = null;
+  ['s4', 's5', 's6'].forEach((s) => enable(s, false));
+  $('s1-err').hidden = true;
+  note('s1-note', `${name} · ${(csv.length / 1048576).toFixed(1)} MB`);
+  await refreshMapping();
+}
+
+// ---- step 2: columns -----------------------------------------------------
+
+async function refreshMapping() {
+  pill('Reading headers…', 'busy');
+  let pre;
+  try {
+    pre = await ask('preview', { csv: state.csv, columns: state.columns });
+  } catch (err) { $('s1-err').hidden = false; $('s1-err').textContent = fail(err); return; }
+
+  const options = (selected) => ['<option value="">— not found —</option>']
+    .concat(pre.columns.map((c) =>
+      `<option value="${c}"${c === selected ? ' selected' : ''}>${c}</option>`)).join('');
+
+  $('map-rows').innerHTML = pre.mapping.filter((m) => m.required || m.source).map((m) => `
+    <tr>
+      <td class="internal">${m.internal}${m.required ? '<span class="req">required</span>' : ''}</td>
+      <td><select data-internal="${m.internal}">${options(m.source)}</select></td>
+      <td><span class="badge ${m.status === 'ok' ? 'ok' : m.status === 'MISSING' ? 'miss' : 'opt'}">${m.status === '-' ? 'optional' : m.status}</span></td>
+    </tr>`).join('');
+
+  const KEY = { HoleID: 'hole', From_m: 'from', To_m: 'to',
+                Easting: 'easting', Northing: 'northing', Elevation: 'elevation' };
+  $('map-rows').querySelectorAll('select').forEach((sel) => {
+    sel.onchange = () => {
+      state.columns[KEY[sel.dataset.internal]] = sel.value;
+      refreshMapping();
+    };
+  });
+
+  note('s2-note', pre.resolved ? 'all required columns found'
+                               : `missing: ${pre.missing.join(', ')}`);
+  enable('s2', true);
+
+  $('assay-scope').textContent =
+    `Figures below are from the first ${fmt(pre.n_preview_rows)} rows, as a guide to picking the column.`;
+
+  $('assay-rows').innerHTML = pre.numeric_columns.map((c) => `
+    <label>
+      <input type="radio" name="assay" value="${c.name}">
+      <span class="nm">${c.name}</span>
+      <span class="st">median ${c.median === null ? '—' : c.median.toPrecision(3)}</span>
+      <span class="st">max ${c.max === null ? '—' : c.max.toPrecision(3)}</span>
+    </label>`).join('') || '<label><span class="nm">No numeric columns available</span></label>';
+
+  $('assay-rows').querySelectorAll('input').forEach((r) => {
+    r.onchange = () => { state.assay = r.value; $('check').disabled = !pre.resolved; note('s3-note', r.value); };
+  });
+
+  $('check').disabled = true;
+  enable('s3', pre.resolved);
+  note('s3-note', pre.resolved ? '' : 'fix the columns above first');
+  pill('Ready', 'ok');
+}
+
+// ---- step 3 -> 4: check --------------------------------------------------
+
+$('check').onclick = async () => {
+  pill('Reading the file…', 'busy');
+  let d;
+  try {
+    d = await ask('load', { csv: state.csv, score_column: state.assay,
+                            columns: state.columns, cfg: state.cfg });
+  } catch (err) { note('s3-note', fail(err)); return; }
+
+  state.loaded = d;
+  const [x0, x1] = d.extent.x, [y0, y1] = d.extent.y, [z0, z1] = d.extent.z;
+
+  $('facts').innerHTML = [
+    ['Samples', fmt(d.n_rows)],
+    ['Holes', fmt(d.n_holes)],
+    ['Median interval', `${fmt(d.interval_m.median, 2)}<small>m</small>`],
+    ['Easting span', `${fmt(x1 - x0)}<small>m</small>`],
+    ['Northing span', `${fmt(y1 - y0)}<small>m</small>`],
+    ['Vertical span', `${fmt(z1 - z0)}<small>m</small>`],
+  ].map(([k, v]) => `<div class="fact"><dt>${k}</dt><dd>${v}</dd></div>`).join('');
+
+  $('notes').innerHTML = `
+    <div class="note">
+      <b>Your minimum of ${d.support.min_neighbors} neighbouring samples is about
+      ${fmt(d.support.effective_core_m)} m of core.</b>
+      <p>That threshold counts samples, not metres, so it means something different if your
+      intervals are composited. Your median interval is ${fmt(d.interval_m.median, 2)} m.
+      Adjust the minimum if that is not the support you expected.</p>
+    </div>
+    <div class="note warn">
+      <b>${fmt(d.rim.pct_exposed, 0)}% of these samples sit within ${fmt(d.rim.radius_m)} m of the edge of your data.</b>
+      <p>Samples near the edge only have neighbours on the inward side, so their orientations
+      lean toward that face. Because you filtered in Leapfrog, the missing neighbours are not
+      in this file and cannot be recovered here. Export a margin of at least
+      ${fmt(d.rim.radius_m)} m beyond the area you actually care about, and treat the outer
+      rim of the result as unreliable.</p>
+    </div>`;
+
+  note('s4-note', `${d.assay.column} · ${fmt(d.assay.n)} assayed, ${fmt(d.assay.n_null)} blank`);
+  enable('s4', true);
+  renderControls();
+  enable('s5', true);
+  pill('Ready', 'ok');
+  $('s4').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+};
+
+// ---- step 5: settings -----------------------------------------------------
+
+function renderControls() {
+  $('controls').innerHTML = CONTROLS.map((c) => {
+    const v = state.cfg[c.key];
+    let input;
+    if (c.kind === 'select') {
+      input = `<select id="c-${c.key}">` + Object.entries(c.options).map(([k, t]) =>
+        `<option value="${k}"${k === v ? ' selected' : ''}>${t}</option>`).join('') + '</select>';
+    } else if (c.kind === 'range') {
+      input = `<input type="range" id="c-${c.key}" min="${c.min}" max="${c.max}" step="${c.step}" value="${v}">
+               <span class="unit" id="u-${c.key}"></span>`;
+    } else if (c.kind === 'check') {
+      input = `<span class="check"><input type="checkbox" id="c-${c.key}"${v ? ' checked' : ''}>
+               <label for="c-${c.key}" style="font-weight:400;margin:0">${c.text}</label></span>`;
+    } else {
+      input = `<input type="number" id="c-${c.key}" value="${v}" min="${c.min}" step="${c.step}">`
+            + (c.unit ? `<span class="unit">${c.unit}</span>` : '');
+    }
+    return `<div class="ctl${c.wide ? ' wide' : ''}">
+              <label for="c-${c.key}">${c.label}</label>
+              <div class="row">${input}</div>
+              <span class="say" id="s-${c.key}"></span>
+            </div>`;
+  }).join('');
+
+  CONTROLS.forEach((c) => {
+    const el = $(`c-${c.key}`);
+    const read = () => c.kind === 'check' ? el.checked
+                     : c.kind === 'select' ? el.value
+                     : parseFloat(el.value);
+    const onChange = () => { state.cfg[c.key] = read(); sayAll(); };
+    el.addEventListener(c.kind === 'range' ? 'input' : 'change', onChange);
+  });
+  sayAll();
+}
+
+// Every consequence the app can work out without re-running the engine.
+function sayAll() {
+  const d = state.loaded;
+
+  CONTROLS.forEach((c) => {
+    const say = $(`s-${c.key}`);
+    if (!say) return;
+    const v = state.cfg[c.key];
+
+    if (c.key === 'estimator') {
+      say.innerHTML = c.hint[v] || '';
+    } else if (c.key === 'active_score_quantile') {
+      const i = Math.round(v * 100);
+      const n = d.active_curve.counts[i];
+      $(`u-${c.key}`).textContent = `top ${fmt(100 - i)}%`;
+      say.innerHTML = `Uses the highest-grade <b>${fmt(n)}</b> of ${fmt(d.n_rows)} samples `
+        + `as estimation points. Everything below the cutoff still informs them as neighbours.`;
+    } else if (c.key === 'min_neighbors') {
+      say.innerHTML = `About <b>${fmt(v * d.interval_m.median)} m</b> of neighbouring core, `
+        + `at your median interval of ${fmt(d.interval_m.median, 2)} m.`;
+    } else if (c.key === 'radius_m') {
+      say.innerHTML = `How far to look for neighbours. Also the margin your export needs: `
+        + `<b>${fmt(d.rim.pct_exposed, 0)}%</b> of samples sit within ${fmt(d.rim.radius_m)} m of the edge.`;
+    } else if (c.key === 'min_holes') {
+      say.innerHTML = 'A point fed by two holes cannot resolve a plane. Three is the honest minimum.';
+    } else if (c.key === 'distance_sigma_m') {
+      say.innerHTML = 'Neighbours further than this count for progressively less.';
+    } else if (c.key === 'log_transform_score') {
+      say.innerHTML = 'Tames the skew of assay distributions. Leave on unless you know otherwise.';
+    }
+  });
+}
+
+$('reset').onclick = () => { state.cfg = { ...state.defaults }; renderControls(); };
+
+// ---- step 4 -> 5: run ----------------------------------------------------
+
+$('run').onclick = async () => {
+  pill('Estimating…', 'busy');
+  $('run').disabled = true;
+  let r;
+  try {
+    r = await ask('run', { estimator: state.cfg.estimator, score_column: state.assay,
+                           columns: state.columns, cfg: state.cfg });
+  } catch (err) { $('run-hint').textContent = fail(err); $('run').disabled = false; return; }
+  $('run').disabled = false;
+
+  if (r.empty) {
+    const g = r.diagnosis;
+    $('run-hint').textContent = '';
+    enable('s6', true);
+    $('result-facts').innerHTML = '';
+    $('net-block').hidden = true;
+    $('view-block').hidden = true;
+    $('result-notes').innerHTML = `
+      <div class="note warn">
+        <b>No orientations could be estimated.</b>
+        <p>Of ${fmt(g.n_active)} candidate samples, ${fmt(g.failed_on_neighbors)} had fewer than
+        ${g.min_neighbors} neighbours within the search radius (the typical sample had
+        ${fmt(g.neighbors_median)}), and ${fmt(g.failed_on_holes)} were fed by fewer than
+        ${g.min_holes} holes. Widen the search radius or lower the minimum.</p>
+      </div>`;
+    pill('No result', 'fail');
+    return;
+  }
+
+  state.result = r;
+  const d = r.diagnostics;
+
+  $('result-facts').innerHTML = [
+    ['Orientations', fmt(r.n_valid)],
+    ['Of candidates', `${fmt(r.pct_active, 0)}<small>%</small>`],
+    ['vs drill pattern', `${fmt(d.vs_reference_deg, 1)}<small>°</small>`],
+    ['Neighbour agreement', `${fmt(d.coherence_deg, 1)}<small>°</small>`],
+    ['Split-half stability', `${fmt(d.stability_deg, 1)}<small>°</small>`],
+    r.true_error_deg === null ? ['Time', `${fmt(r.timing_s.method + r.timing_s.prepare, 2)}<small>s</small>`]
+                              : ['True error', `${fmt(r.true_error_deg, 1)}<small>°</small>`],
+  ].map(([k, v]) => `<div class="fact"><dt>${k}</dt><dd>${v}</dd></div>`).join('');
+
+  const close = d.vs_reference_deg < 5;
+  const nb = r.neighbors;
+  const dropped = r.n_active - r.n_valid;
+  $('result-notes').innerHTML = (dropped > 0 ? `
+    <div class="note">
+      <b>${fmt(dropped)} of ${fmt(r.n_active)} candidate points got no answer.</b>
+      <p>${fmt(nb.failed_on_neighbors)} had fewer than ${state.cfg.min_neighbors} neighbours
+      within ${fmt(state.cfg.radius_m)} m — the typical point had ${fmt(nb.median)}, and the
+      sparsest tenth had ${fmt(nb.p10)} or fewer. ${fmt(nb.failed_on_holes)} were fed by fewer
+      than ${state.cfg.min_holes} holes. Widen the search radius or lower the minimum to keep
+      more of them, at the cost of thinner support behind each one.</p>
+    </div>` : '') + `
+    <div class="note ${close ? 'warn' : ''}">
+      <b>${close ? 'This field closely matches the drill pattern.'
+                 : 'This field differs from the drill pattern.'}</b>
+      <p>Every run is compared against what the drill programme alone would report, with the
+      grades removed. ${fmt(d.vs_reference_deg, 1)}° apart.
+      ${close ? 'Under 5° means the result may be describing where the holes went rather than the rock — treat it with care and check it in section.'
+              : 'A clear separation means the grades, not the drilling, are driving the answer.'}
+      For scale, ${fmt(d.coherence_null_deg, 0)}° is what unrelated orientations score.</p>
+    </div>`;
+
+  renderView();
+  renderNets();
+  renderDiagnostics(r);
+  enable('s6', true);
+  pill(`${fmt(r.n_valid)} orientations`, 'ok');
+
+  const exp = await ask('export', {});
+  state.exportCsv = exp.csv;
+  $('export-head').textContent = exp.csv.split('\n').slice(0, 4).join('\n');
+  $('download').disabled = false;
+  $('download-settings').disabled = false;
+  $('dl-hint').textContent = `${fmt(exp.n_rows)} rows · dip, dip azimuth and pitch`;
+  note('s6-note', `${methodName(r.estimator)} · ${fmt(r.timing_s.prepare + r.timing_s.method + r.timing_s.reference, 2)} s`);
+  $('s6').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  console.log('HARNESS_RESULT ' + JSON.stringify({
+    n_rows: state.loaded.n_rows, n_holes: state.loaded.n_holes,
+    n_active: r.n_active, n_valid: r.n_valid,
+    vs_reference_deg: d.vs_reference_deg, coherence_deg: d.coherence_deg,
+    stability_deg: d.stability_deg, true_error_deg: r.true_error_deg,
+    export_rows: exp.n_rows, first_export_row: exp.csv.split('\n')[1],
+  }));
+};
+
+// ---- 3D view -------------------------------------------------------------
+//
+// The viewer is an ES module (three.js only ships as one), so it is imported
+// separately and handed to this script through window. Everything here is the
+// control surface; the drawing lives in viewer.js.
+
+let viewer = null;
+
+const VIEW_LEGEND = {
+  grade:      ['LOW GRADE', 'HIGH GRADE'],
+  dip:        ['FLAT 0°', 'VERTICAL 90°'],
+  planarity:  ['UNCERTAIN', 'WELL DEFINED'],
+  reference:  ['SAME AS DRILLING', 'INDEPENDENT 60°'],
+};
+
+const VIEW_NOTE = {
+  grade: 'Coloured by the assay value at each point.',
+  dip: 'Coloured by how steeply each plane dips.',
+  planarity: 'Coloured by how clearly a single plane is defined there. Faint discs are weakly constrained.',
+  reference: 'Coloured by how far each disc differs from what the drilling alone would report. '
+           + 'Dark areas are where the answer is following the drill pattern rather than the rock.',
+};
+
+function viewOptions() {
+  return {
+    colorBy: $('v-color').value,
+    stride: parseInt($('v-show').value, 10),
+    radius: parseFloat($('v-size').value),
+    section: parseFloat($('v-section').value),
+    exaggeration: parseFloat($('v-exag').value),
+    showTraces: $('v-traces').checked,
+    scaleByPlanarity: true,
+  };
+}
+
+function refreshView() {
+  if (!viewer || !viewer.isReady()) return;
+  viewer.update(viewOptions());
+  const by = $('v-color').value;
+  const [lo, hi] = VIEW_LEGEND[by];
+  $('v-lo').textContent = lo;
+  $('v-hi').textContent = hi;
+  $('view-note').textContent =
+    `${fmt(viewer.shownCount())} of ${fmt(state.result.n_valid)} discs drawn. ${VIEW_NOTE[by]}`;
+  const steps = ramp().slice(1);
+  $('v-bar').style.background = `linear-gradient(90deg, ${steps.join(',')})`;
+}
+
+function renderView() {
+  const g = state.result && state.result.geometry;
+  if (!g || !viewer) return;
+  $('view-block').hidden = false;
+  viewer.init($('view'));
+  viewer.load(g);
+  refreshView();
+}
+
+['v-color', 'v-show', 'v-size', 'v-section', 'v-exag', 'v-traces'].forEach((id) => {
+  const el = $(id);
+  el.addEventListener(el.type === 'range' ? 'input' : 'change', refreshView);
+});
+
+$('view-presets').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-view]');
+  if (!btn || !viewer || !viewer.isReady()) return;
+  [...$('view-presets').children].forEach((b) => b.classList.toggle('on', b === btn));
+  viewer.setView(btn.dataset.view);
+});
+
+// ---- stereonets ----------------------------------------------------------
+//
+// Equal-area (Schmidt) lower hemisphere, the same projection as
+// viz/stereonet.py, so a browser panel and a matplotlib figure of the same run
+// are the same picture.
+
+const LIM = Math.SQRT2;                 // radius of the projected disc
+
+function equalAreaXY(trendDeg, plungeDeg) {
+  const t = trendDeg * Math.PI / 180, p = plungeDeg * Math.PI / 180;
+  const r = LIM * Math.sin((Math.PI / 2 - p) / 2);
+  return [r * Math.sin(t), r * Math.cos(t)];
+}
+
+// Single hue, light to dark on a light ground and surface-to-bright on a dark
+// one — chosen per mode rather than flipped, so density always gains contrast
+// against the surface it sits on. Steps are the reference blue ramp.
+// Step 0 is each mode's raised surface rather than its exact card colour, so
+// the projected disc stays faintly visible where nothing plots -- the reader
+// can see the area the data could have occupied, in both themes.
+const RAMP_LIGHT = ['#f5f8f9', '#cde2fb', '#9ec5f4', '#6da7ec', '#3987e5',
+                    '#256abf', '#184f95', '#0d366b'];
+const RAMP_DARK  = ['#1d2832', '#16304a', '#184f95', '#256abf', '#3987e5',
+                    '#6da7ec', '#9ec5f4', '#cde2fb'];
+const isDark = () => matchMedia('(prefers-color-scheme: dark)').matches;
+const ramp = () => isDark() ? RAMP_DARK : RAMP_LIGHT;
+
+function rampColor(t) {                 // t in 0..1 -> [r,g,b]
+  const steps = ramp();
+  const x = Math.max(0, Math.min(1, t)) * (steps.length - 1);
+  const i = Math.min(steps.length - 2, Math.floor(x)), f = x - i;
+  const hex = (h) => [1, 3, 5].map((k) => parseInt(h.slice(k, k + 2), 16));
+  const a = hex(steps[i]), b = hex(steps[i + 1]);
+  return [0, 1, 2].map((k) => Math.round(a[k] + (b[k] - a[k]) * f));
+}
+
+function inkColor() {
+  return getComputedStyle(document.body).getPropertyValue('--ink-3').trim() || '#71808a';
+}
+
+/* Density by binning then blurring, rather than evaluating a kernel at every
+   grid cell for every point: the naive form is grid x n and visibly stalls the
+   page at a few thousand poles. A separable Gaussian gives the same picture in
+   a fraction of the time. */
+function densityGrid(trend, plunge, n, G, sigmaPx) {
+  const grid = new Float32Array(G * G);
+  for (let k = 0; k < n; k++) {
+    const [x, y] = equalAreaXY(trend[k], plunge[k]);
+    const gx = Math.round((x / LIM * 0.5 + 0.5) * (G - 1));
+    const gy = Math.round((-y / LIM * 0.5 + 0.5) * (G - 1));
+    if (gx >= 0 && gx < G && gy >= 0 && gy < G) grid[gy * G + gx] += 1;
+  }
+
+  const radius = Math.ceil(sigmaPx * 3);
+  const kern = [];
+  for (let d = -radius; d <= radius; d++) kern.push(Math.exp(-(d * d) / (2 * sigmaPx * sigmaPx)));
+  const sum = kern.reduce((a, b) => a + b, 0);
+  const k1 = kern.map((v) => v / sum);
+
+  const pass = (src) => {
+    const dst = new Float32Array(G * G);
+    for (let r = 0; r < G; r++) {
+      for (let c = 0; c < G; c++) {
+        let acc = 0;
+        for (let d = -radius; d <= radius; d++) {
+          const cc = c + d;
+          if (cc >= 0 && cc < G) acc += src[r * G + cc] * k1[d + radius];
+        }
+        dst[r * G + c] = acc;
+      }
+    }
+    return dst;
+  };
+  const transpose = (src) => {
+    const dst = new Float32Array(G * G);
+    for (let r = 0; r < G; r++) for (let c = 0; c < G; c++) dst[c * G + r] = src[r * G + c];
+    return dst;
+  };
+  return transpose(pass(transpose(pass(grid))));
+}
+
+function drawNet(canvas, trend, plunge, n, opts) {
+  const ctx = canvas.getContext('2d');
+  const S = canvas.width, mid = S / 2, R = S * 0.42;
+  ctx.clearRect(0, 0, S, S);
+
+  if (opts.density && n > 0) {
+    const G = 150;
+    const grid = densityGrid(trend, plunge, n, G, G * 0.045);
+    let peak = 0;
+    for (let i = 0; i < grid.length; i++) if (grid[i] > peak) peak = grid[i];
+
+    const img = ctx.createImageData(S, S);
+    for (let py = 0; py < S; py++) {
+      for (let px = 0; px < S; px++) {
+        const dx = (px - mid) / R, dy = (py - mid) / R;
+        if (dx * dx + dy * dy > 1) continue;
+        const gx = Math.min(G - 1, Math.max(0, Math.round((dx * 0.5 + 0.5) * (G - 1))));
+        const gy = Math.min(G - 1, Math.max(0, Math.round((dy * 0.5 + 0.5) * (G - 1))));
+        const [r, g, b] = rampColor(peak > 0 ? grid[gy * G + gx] / peak : 0);
+        const o = (py * S + px) * 4;
+        img.data[o] = r; img.data[o + 1] = g; img.data[o + 2] = b; img.data[o + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+
+  if (opts.points && n > 0) {
+    ctx.fillStyle = isDark() ? 'rgba(255,255,255,.5)' : 'rgba(10,20,30,.45)';
+    for (let k = 0; k < n; k++) {
+      const [x, y] = equalAreaXY(trend[k], plunge[k]);
+      ctx.beginPath();
+      ctx.arc(mid + x / LIM * R, mid - y / LIM * R, S * 0.006, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+  }
+
+  // Frame last, so it is never buried under the fill.
+  const ink = inkColor();
+  ctx.strokeStyle = ink; ctx.lineWidth = S * 0.004;
+  ctx.beginPath(); ctx.arc(mid, mid, R, 0, 2 * Math.PI); ctx.stroke();
+
+  ctx.lineWidth = S * 0.002; ctx.globalAlpha = 0.55;
+  for (let a = 0; a < 360; a += 30) {
+    const rad = a * Math.PI / 180;
+    ctx.beginPath();
+    ctx.moveTo(mid + Math.sin(rad) * R, mid - Math.cos(rad) * R);
+    ctx.lineTo(mid + Math.sin(rad) * R * 1.05, mid - Math.cos(rad) * R * 1.05);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = ink;
+  ctx.font = `600 ${Math.round(S * 0.038)}px ui-sans-serif, system-ui, sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('N', mid, mid - R * 1.13);
+}
+
+function renderNets() {
+  const g = state.result && state.result.geometry;
+  if (!g) return;
+  const opts = { density: $('net-density').checked, points: $('net-points').checked };
+
+  drawNet($('net-a'), new Float32Array(g.trend.buffer), new Float32Array(g.plunge.buffer), g.n, opts);
+  drawNet($('net-b'), new Float32Array(g.reference.trend.buffer),
+          new Float32Array(g.reference.plunge.buffer), g.reference.n, opts);
+
+  $('net-a-cap').textContent = `${fmt(g.n)} poles · ${methodName(state.result.estimator)}`;
+  $('net-b-cap').textContent = `${fmt(g.reference.n)} poles · reference`;
+  $('net-a-title').textContent = `Your result — ${methodName(state.result.estimator)}`;
+
+  const steps = ramp();
+  $('scale-bar').style.background = `linear-gradient(90deg, ${steps.join(',')})`;
+  $('net-block').hidden = false;
+}
+
+['net-density', 'net-points'].forEach((id) => { $(id).onchange = renderNets; });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', renderNets);
+
+// ---- diagnostics ---------------------------------------------------------
+//
+// Every one of these is an angle where ~60 deg means no signal at all, so each
+// is shown against the number that would count as nothing.
+
+function renderDiagnostics(r) {
+  const d = r.diagnostics;
+  const band = (v, good, weak) => v == null ? ['—', 'v-none']
+    : v < good ? ['clear', 'v-good'] : v < weak ? ['weak', 'v-weak'] : ['none', 'v-none'];
+
+  const rows = [
+    { nm: 'Agreement between neighbours', v: d.coherence_deg,
+      verdict: band(d.coherence_deg, 0.6 * d.coherence_null_deg, 0.9 * d.coherence_null_deg),
+      say: `Nearby points in different holes disagree by ${fmt(d.coherence_deg, 1)}° on average. `
+         + `Shuffling the same answers at random gives ${fmt(d.coherence_null_deg, 1)}°, so anything `
+         + `near that is noise rather than a field.` },
+    { nm: 'Repeatability across holes', v: d.stability_deg,
+      verdict: band(d.stability_deg, 25, 45),
+      say: `Estimating every point twice from two halves of the drilling changes the answer by `
+         + `${fmt(d.stability_deg, 1)}° (${fmt(d.n_stability)} points could be compared). Above about `
+         + `45° the result depends on which holes happened to be drilled, not on the rock.` },
+    { nm: 'Distance from the drill pattern', v: d.vs_reference_deg,
+      verdict: d.vs_reference_deg < 5 ? ['drilling', 'v-none']
+             : d.vs_reference_deg < 15 ? ['partly', 'v-weak'] : ['rock', 'v-good'],
+      say: `${fmt(d.vs_reference_deg, 1)}° between the two plots above. Close together means the `
+         + `answer is mostly reporting where the holes went.` },
+  ];
+
+  $('diag').innerHTML = rows.map((row) => `
+    <div class="diag-row">
+      <span class="nm">${row.nm}</span>
+      <span class="val">${fmt(row.v, 1)}°<br><span class="verdict ${row.verdict[1]}">${row.verdict[0]}</span></span>
+      <span class="say">${row.say}</span>
+    </div>`).join('');
+}
+
+// three.js is ESM-only, so the viewer loads as a module and announces itself.
+// A failure here must not take the rest of the result panel down with it.
+const viewerScript = document.createElement('script');
+viewerScript.type = 'module';
+viewerScript.textContent = `
+  import * as v from './viewer.js';
+  window.__viewer = v;
+  window.dispatchEvent(new Event('viewer-ready'));
+`;
+window.addEventListener('viewer-ready', () => {
+  viewer = window.__viewer;
+  if (state.result) renderView();
+});
+window.addEventListener('error', (e) => {
+  if (e.filename && e.filename.includes('viewer.js')) {
+    $('view-block').hidden = true;
+    console.error('3D view unavailable:', e.message);
+  }
+}, true);
+document.body.appendChild(viewerScript);
+
+window.state = state;          // for debugging from the console
+
+// ---- reproducibility ------------------------------------------------------
+//
+// A run is the file plus these choices. The file is the user's; this saves the
+// choices, so a result can be reproduced or handed to a colleague without
+// anyone remembering what the sliders were on.
+
+function settingsBlob() {
+  return {
+    lva_settings_version: 1,
+    saved_utc: new Date().toISOString(),
+    source_file: state.fileName,
+    assay_column: state.assay,
+    column_mapping: state.columns,      // only what the user corrected by hand
+    parameters: state.cfg,
+    engine: state.versions || null,
+    result: state.result ? {
+      estimator: state.result.estimator,
+      n_valid: state.result.n_valid,
+      n_active: state.result.n_active,
+      diagnostics: state.result.diagnostics,
+    } : null,
+  };
+}
+
+function downloadJSON(obj, name) {
+  const url = URL.createObjectURL(
+    new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = name; a.click();
+  URL.revokeObjectURL(url);
+}
+
+const settingsName = () =>
+  `${(state.fileName || 'lva').replace(/\.csv.*$/, '')}_lva_settings.json`;
+
+$('save-settings').onclick = () => downloadJSON(settingsBlob(), settingsName());
+$('download-settings').onclick = $('save-settings').onclick;
+
+$('load-settings').onclick = () => $('settings-file').click();
+$('settings-file').onchange = (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    let saved;
+    try { saved = JSON.parse(reader.result); }
+    catch { $('run-hint').textContent = 'That file is not valid JSON.'; return; }
+
+    if (!saved.parameters) {
+      $('run-hint').textContent = 'No settings found in that file.';
+      return;
+    }
+    // Only keys the engine actually exposes; a stale file from an older
+    // version must not smuggle in a parameter that no longer exists.
+    const known = Object.keys(state.defaults || {});
+    known.forEach((k) => {
+      if (saved.parameters[k] !== undefined) state.cfg[k] = saved.parameters[k];
+    });
+    renderControls();
+    $('run-hint').textContent = saved.source_file && saved.source_file !== state.fileName
+      ? `Settings loaded (saved against ${saved.source_file}).`
+      : 'Settings loaded.';
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+};
+
+$('download').onclick = () => {
+  const base = (state.fileName || 'orientations').replace(/\.csv.*$/, '');
+  const url = URL.createObjectURL(new Blob([state.exportCsv], { type: 'text/csv' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = `${base}_lva_leapfrog.csv`; a.click();
+  URL.revokeObjectURL(url);
+};
+</script>
+</body>
+</html>

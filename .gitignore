@@ -40,3 +40,9 @@ __pycache__/
 
 # Synthetic demo outputs -- regenerate with scripts/compare_methods.py --synthetic
 out/synthetic_*
+
+# Browser app build artifacts -- regenerate with scripts/build_app.py.
+# (app/sample_synthetic.csv is already covered by the blanket *.csv rule.)
+app/core.zip
+app/pyodide/
+app/three/
