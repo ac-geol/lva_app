@@ -47,8 +47,13 @@ DEFAULT_CFG = {
     'decluster_by_hole': True,
 
     # ---- estimator ----
-    # 'lsq_gradient' (default) | 'shape_pca'
-    'estimator': 'lsq_gradient',
+    # 'shape_pca' (default) | 'lsq_gradient'
+    # shape_pca ships as the default on the evidence available: it wins against
+    # synthetic ground truth (15.6 deg vs 21.9) and against logged contacts
+    # (21.5 vs 29.2). docs/TODO.md section 3 records the one experiment that
+    # could overturn that -- a single-azimuth drill programme, still untried --
+    # and docs/METHOD_COMPARISON.md still argues the superseded position.
+    'estimator': 'shape_pca',
 
     # lsq_gradient: ridge on the normal equations, relative to each node's own
     # tensor magnitude. Large enough to survive a degenerate drill pattern,
@@ -61,6 +66,11 @@ DEFAULT_CFG = {
     # ---- column mapping (None => auto-detect from aliases) ----
     'columns': {
         'samples':  {'hole': None, 'from': None, 'to': None},
+        # One table of already-desurveyed points, as Leapfrog and Datamine
+        # export it. Coordinates live on the rows, so no collar or survey
+        # table is involved. See core/ingest.load_points.
+        'points':   {'hole': None, 'from': None, 'to': None,
+                     'easting': None, 'northing': None, 'elevation': None},
         'collars':  {'hole': None, 'easting': None, 'northing': None,
                      'elevation': None, 'length': None, 'dip': None,
                      'azimuth': None, 'property': None, 'prospect': None,

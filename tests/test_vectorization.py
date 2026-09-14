@@ -105,3 +105,34 @@ def test_declustering_equalizes_hole_influence():
     assert raw[h1].sum() / raw[h2].sum() > 10
     # Declustered, the two holes carry comparable total weight.
     assert 0.3 < dec[h1].sum() / dec[h2].sum() < 3.0
+
+
+# --------------------------------------------------------------------------
+# Platform portability. `intp` is int64 here and int32 under Pyodide's wasm32,
+# so these assertions look tautological on a developer machine -- they are the
+# only thing standing between the engine and a TypeError in the browser.
+# --------------------------------------------------------------------------
+
+def test_edge_index_arrays_are_intp():
+    """np.bincount requires intp indices, not merely 64-bit ones."""
+    coords = np.array([[0., 0., 0.], [10., 0., 0.], [0., 10., 0.],
+                       [10., 10., 0.], [5., 5., 5.]])
+    hole_code = np.array([0, 1, 2, 3, 4], dtype=np.int64)
+
+    i, j, d, u = build_edges(coords, 50.0, hole_code)
+    assert i.dtype == np.intp
+    assert j.dtype == np.intp
+
+    # The call that actually fails on a 32-bit build if this regresses.
+    np.bincount(i, minlength=len(coords))
+
+
+def test_edge_set_counts_survive_intp_indices():
+    coords = np.array([[0., 0., 0.], [10., 0., 0.], [0., 10., 0.],
+                       [10., 10., 0.], [5., 5., 5.]])
+    hole_code = np.array([0, 1, 2, 3, 4], dtype=np.int64)
+    cfg = make_cfg(radius_m=50.0, distance_sigma_m=20.0)
+
+    edges = build_edge_set(coords, np.ones(5), np.ones(5), hole_code, cfg)
+    assert edges.neighbor_counts().sum() == edges.n_edges
+    assert np.all(edges.hole_counts(hole_code) <= 4)

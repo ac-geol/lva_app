@@ -78,3 +78,64 @@ def run_estimator(ds: Dataset, cfg: dict, name: str | None = None,
     out['local_n'] = edges.neighbor_counts()
     out['local_holes'] = edges.hole_counts(ds.hole_code)
     return out.loc[out['valid']].drop(columns='valid').reset_index(drop=True)
+
+
+def hole_paths_from_points(points: pd.DataFrame) -> dict:
+    """Reconstruct a drawable trace per hole from desurveyed sample midpoints.
+
+    Coordinates only: a point table carries no survey attitude, so unlike
+    `desurvey.build_hole_path` there are no downhole direction columns. This
+    is enough to draw the hole alongside its orientation discs, which is all
+    anything downstream asks of it.
+    """
+    out = {}
+    for hole_id, g in points.groupby(COLS['hole'], sort=False):
+        g = g.sort_values('mid_m')
+        out[str(hole_id)] = pd.DataFrame({
+            COLS['depth']: g['mid_m'].to_numpy(float),
+            'X': g['mid_x'].to_numpy(float),
+            'Y': g['mid_y'].to_numpy(float),
+            'Z': g['mid_z'].to_numpy(float),
+        }).reset_index(drop=True)
+    return out
+
+
+def prepare_points(points: pd.DataFrame, cfg: dict) -> Dataset:
+    """Prepare an already-desurveyed point table. No collars, no surveys.
+
+    Identical to `prepare` from scoring onward -- same score, same active
+    selection, same Dataset -- so every estimator, validation statistic and
+    diagnostic downstream cannot tell which route the coordinates arrived by.
+    """
+    # Refused rather than ignored: compositing relays intervals downhole and
+    # moves their midpoints, but the coordinates in a point table belong to the
+    # intervals exactly as supplied. Compositing here would silently pair a
+    # composited grade with an uncomposited position.
+    if cfg.get('composite_length_m'):
+        raise ValueError(
+            "composite_length_m is not supported for desurveyed point input: "
+            "compositing moves interval midpoints, and this table's "
+            "coordinates belong to the intervals as supplied. Composite "
+            "upstream, in the software that holds the survey data.")
+
+    des = points.copy()
+    des[['mid_x', 'mid_y', 'mid_z']] = des[
+        [COLS['easting'], COLS['northing'], COLS['elev']]].to_numpy(float)
+    des = des.reset_index(drop=True).reset_index(names='src_index')
+
+    des = build_mineralization_score(
+        des, cfg['score_columns'],
+        log_transform=cfg['log_transform_score'],
+        active_quantile=cfg['active_score_quantile'])
+
+    active = des.loc[des['is_active']].copy().reset_index(drop=True)
+    hole_ids = active[COLS['hole']].astype(str).to_numpy()
+    codes, _ = pd.factorize(hole_ids)
+
+    return Dataset(
+        des=des, active=active,
+        coords=active[['mid_x', 'mid_y', 'mid_z']].to_numpy(float),
+        scores=active['min_score'].to_numpy(float),
+        lengths=active['interval_m'].to_numpy(float),
+        hole_code=codes.astype(np.int64), hole_ids=hole_ids,
+        paths=hole_paths_from_points(des))

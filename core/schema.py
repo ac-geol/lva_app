@@ -42,6 +42,12 @@ ALIASES = {
 # Which internal key each table needs, and which are merely nice to have.
 REQUIRED = {
     'samples':  {'hole': True, 'from': True, 'to': True},
+    # A single table of already-desurveyed points: what Leapfrog and Datamine
+    # export. Carries its own coordinates, so no collar or survey table is
+    # needed and no desurveying happens. Easting/Northing/Elevation resolve
+    # from 'X'/'Y'/'Z' through the alias list above.
+    'points':   {'hole': True, 'from': True, 'to': True,
+                 'easting': True, 'northing': True, 'elevation': True},
     'collars':  {'hole': True, 'easting': True, 'northing': True,
                  'elevation': True, 'length': True},
     'surveys':  {'hole': True, 'depth': True, 'dip': True, 'azimuth': True},

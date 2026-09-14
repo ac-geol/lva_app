@@ -156,6 +156,7 @@ def composite_downhole(samples: pd.DataFrame, length_m: float | None, *,
     k = np.where(is_tail, k - 1, k)
 
     gid, _ = pd.factorize(p_run.astype(np.int64) * (int(k.max()) + 2) + k)
+    gid = gid.astype(np.intp)          # bincount index; see core/neighbors.py
     n_out = int(gid.max()) + 1
 
     assayed = np.bincount(gid, weights=p_len, minlength=n_out)

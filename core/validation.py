@@ -29,7 +29,7 @@ def neighbor_agreement(poles: np.ndarray, edges: EdgeSet,
     if node_ids is None:
         node_ids = np.arange(n)
 
-    slot = np.full(n, -1, dtype=np.int64)
+    slot = np.full(n, -1, dtype=np.intp)
     slot[node_ids] = np.arange(len(node_ids))
     ok = (slot[edges.i] >= 0) & (slot[edges.j] >= 0)
     i, j = edges.i[ok], edges.j[ok]

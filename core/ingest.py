@@ -1,7 +1,11 @@
-"""Load and clean the three drillhole tables.
+"""Load and clean drillhole data, by either of two routes.
 
-Accepts paths or file-like objects, so the same code serves a CLI, a notebook,
-or a browser upload.
+`load_tables` takes the three raw tables (samples, collars, surveys) and leaves
+desurveying to the pipeline. `load_points` takes one table of already-desurveyed
+points, as exported by Leapfrog or Datamine, and needs no collar or survey data.
+
+Both accept paths or file-like objects, so the same code serves a CLI, a
+notebook, or a browser upload.
 """
 from __future__ import annotations
 
@@ -63,8 +67,13 @@ def _keep_holes(df: pd.DataFrame, holes: set) -> pd.DataFrame:
     return df.loc[df[COLS['hole']].astype(str).isin(holes)].copy()
 
 
-def apply_filters(samples, collars, surveys, collar_meta, cfg: dict):
-    """Restrict to a Property / Prospect / explicit hole list, if configured."""
+def select_holes(collar_meta: pd.DataFrame, cfg: dict) -> set | None:
+    """Hole IDs surviving the Property / Prospect / explicit-hole filters.
+
+    None means "no filter configured", which is distinct from an empty set.
+    Split out of apply_filters so the single-table point path shares exactly
+    these semantics rather than reimplementing them.
+    """
     hole = COLS['hole']
     keep = None
 
@@ -80,6 +89,58 @@ def apply_filters(samples, collars, surveys, collar_meta, cfg: dict):
         sel = set(map(str, cfg['hole_filter']))
         keep = sel if keep is None else (keep & sel)
 
+    return keep
+
+
+def apply_filters(samples, collars, surveys, collar_meta, cfg: dict):
+    """Restrict to a Property / Prospect / explicit hole list, if configured."""
+    keep = select_holes(collar_meta, cfg)
     if keep is None:
         return samples, collars, surveys
     return tuple(_keep_holes(t, keep) for t in (samples, collars, surveys))
+
+
+def load_points(points_src, cfg: dict) -> pd.DataFrame:
+    """Load one table of already-desurveyed sample points.
+
+    This is the Leapfrog / Datamine export path: the coordinates are in the
+    file, so there is no collar table, no survey table and no desurveying. The
+    returned frame carries the same internal names and derived columns as
+    `load_tables` produces for samples, plus mid_x / mid_y / mid_z taken
+    directly from the file's coordinates.
+
+    Coordinates are read as the location of the interval MIDPOINT, which is
+    what both packages export for a desurveyed interval table.
+    """
+    auto = cfg.get('auto_detect_columns', True)
+    colmap = cfg.get('columns', {})
+
+    pts = rename_to_internal(_read(points_src), colmap.get('points'),
+                             REQUIRED['points'], auto_detect=auto)
+
+    numeric = ([COLS['from'], COLS['to'], COLS['easting'], COLS['northing'],
+                COLS['elev']] + list(cfg.get('score_columns', [])))
+    for c in numeric:
+        if c in pts.columns:
+            pts[c] = pd.to_numeric(pts[c], errors='coerce')
+
+    pts['interval_m'] = pts[COLS['to']] - pts[COLS['from']]
+    pts['mid_m'] = 0.5 * (pts[COLS['from']] + pts[COLS['to']])
+    pts = pts.loc[pts['interval_m'] > 0].copy()
+
+    if cfg.get('exclude_low_recovery') and cfg['low_recovery_col'] in pts.columns:
+        flag = pts[cfg['low_recovery_col']].fillna('N').astype(str).str.upper()
+        pts = pts.loc[flag != 'Y'].copy()
+
+    # A point with no coordinate cannot be a node, and carrying it forward only
+    # produces a NaN that survives into the neighbourhood graph.
+    coords = [COLS['easting'], COLS['northing'], COLS['elev']]
+    pts = pts.dropna(subset=coords).copy()
+
+    # The point table is its own collar metadata: Property / Prospect travel on
+    # the rows when the exporting package was asked to include them.
+    keep = select_holes(pts, cfg)
+    if keep is not None:
+        pts = _keep_holes(pts, keep)
+
+    return pts.reset_index(drop=True)

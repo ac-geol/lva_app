@@ -34,9 +34,11 @@ class EdgeSet:
 
     def hole_counts(self, hole_code: np.ndarray) -> np.ndarray:
         """Distinct contributing holes per node -- the honest sample size."""
+        # The packed key needs int64 range; the bincount argument needs intp.
+        # Those are the same type on a 64-bit build and differ under wasm32.
         key = self.i.astype(np.int64) * (hole_code.max() + 1) + hole_code[self.j]
         uniq_key = np.unique(key)
-        return np.bincount(uniq_key // (hole_code.max() + 1),
+        return np.bincount((uniq_key // (hole_code.max() + 1)).astype(np.intp),
                            minlength=self.n_nodes)
 
 
@@ -47,10 +49,13 @@ def build_edges(coords: np.ndarray, radius_m: float, hole_code: np.ndarray,
     tree = cKDTree(coords)
     nb = tree.query_ball_point(coords, r=radius_m, return_sorted=False)
 
-    lens = np.fromiter((len(x) for x in nb), dtype=np.int64, count=len(nb))
-    i = np.repeat(np.arange(len(nb), dtype=np.int64), lens)
-    j = np.concatenate([np.asarray(x, dtype=np.int64) for x in nb]) if len(nb) \
-        else np.empty(0, dtype=np.int64)
+    # intp, not int64: this is what indexes arrays, and np.bincount insists on
+    # it. They are identical on a 64-bit build; under Pyodide's 32-bit wasm they
+    # are not, and an int64 index array is rejected outright.
+    lens = np.fromiter((len(x) for x in nb), dtype=np.intp, count=len(nb))
+    i = np.repeat(np.arange(len(nb), dtype=np.intp), lens)
+    j = np.concatenate([np.asarray(x, dtype=np.intp) for x in nb]) if len(nb) \
+        else np.empty(0, dtype=np.intp)
 
     keep = i != j
     if exclude_same_hole:
@@ -68,7 +73,7 @@ def _group_ids(i: np.ndarray, hole_code_j: np.ndarray) -> tuple[np.ndarray, int]
     """One group per (node, contributing hole) pair."""
     key = i.astype(np.int64) * (hole_code_j.max() + 1) + hole_code_j
     _, inv = np.unique(key, return_inverse=True)
-    return inv, int(inv.max()) + 1 if len(inv) else 0
+    return inv.astype(np.intp), int(inv.max()) + 1 if len(inv) else 0
 
 
 def _group_max(values: np.ndarray, inv: np.ndarray, n_groups: int) -> np.ndarray:
