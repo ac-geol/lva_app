@@ -40,9 +40,9 @@ def main() -> None:
     args = ap.parse_args()
 
     build_app.APP.mkdir(exist_ok=True)
-    print(f"core.zip  {build_app.build_core_zip()} modules")
+    print(f"core.zip  {build_app.build_core_zip()} modules", flush=True)
     if not build_app.SAMPLE_CSV.exists():
-        print(f"sample    {build_app.build_sample_csv()} rows")
+        print(f"sample    {build_app.build_sample_csv()} rows", flush=True)
     if not (build_app.PYODIDE_DIR / 'pyodide.mjs').exists():
         sys.exit("Pyodide is not vendored. Run: python scripts/build_app.py --pyodide")
 
@@ -52,7 +52,7 @@ def main() -> None:
     handler = functools.partial(Handler, directory=str(build_app.APP))
     http.server.ThreadingHTTPServer.allow_reuse_address = True
     with http.server.ThreadingHTTPServer(('127.0.0.1', args.port), handler) as httpd:
-        print(f"\n  http://127.0.0.1:{args.port}/index.html\n")
+        print(f"\n  http://127.0.0.1:{args.port}/index.html\n", flush=True)
         httpd.serve_forever()
 
 

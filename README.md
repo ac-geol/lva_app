@@ -8,6 +8,7 @@ to two methods.**
 Full results and reasoning in
 [`docs/METHOD_COMPARISON.md`](docs/METHOD_COMPARISON.md).
 Running this on another machine: [`docs/SETUP.md`](docs/SETUP.md).
+Setting up and using the browser app: [`docs/APP_SETUP.md`](docs/APP_SETUP.md).
 
 ```bash
 uv venv --python 3.11 .venv

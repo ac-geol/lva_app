@@ -4,6 +4,10 @@ The engine from `core/`, running under Pyodide in a Web Worker. No server, no
 upload, no network at run time — the page, the Python runtime and the data all
 stay on the machine that opens it.
 
+For a step-by-step guide aimed at someone who does not write Python, see
+[`../docs/APP_SETUP.md`](../docs/APP_SETUP.md). What follows is the short
+version.
+
 ## Build and run
 
 ```bash
