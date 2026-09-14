@@ -1,7 +1,7 @@
 # Setup — running this on another machine
 
 The repo carries **no drillhole data** — code, tests, docs and aggregate result
-tables only. The 57 tests are self-contained, so `git clone` + `pytest` proves
+tables only. The 71 tests are self-contained, so `git clone` + `pytest` proves
 the engine works with nothing else to fetch. Budget about five minutes.
 
 To reproduce the method-comparison numbers you supply your own tables — see
@@ -85,7 +85,7 @@ git branch -a
 
 | branch | what it is |
 |---|---|
-| `main` | Everything. The engine, 57 tests, downhole compositing (off by default), and every result written up in `docs/METHOD_COMPARISON.md`. |
+| `main` | Everything. The engine, 71 tests, downhole compositing (off by default), and every result written up in `docs/METHOD_COMPARISON.md`. |
 
 `main` is the only branch — the former `feature/downhole-compositing` was
 merged into it and is gone. Nothing else to check out.
@@ -285,7 +285,7 @@ holes. That is a known limitation with a known fix, not a result.
 | `core/config.py` | Every tunable, with the reasoning for each default. Start here. |
 | `scripts/` | Runnable comparisons. Deliberately outside `core/`. |
 | `viz/` | Stereonets. |
-| `tests/` | The 57 tests. |
+| `tests/` | The 71 tests. |
 | `out/` | Figures and result tables. |
 | `docs/METHOD_COMPARISON.md` | What the method comparison found and why. The main writeup. |
 | `docs/COMPOSITING.md` | Compositing, and the `min_neighbors` limitation. |
