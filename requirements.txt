@@ -1,5 +1,5 @@
 # Pinned to the versions this work was developed and verified against
-# (Python 3.11.15). See docs/SETUP.md.
+# (Python 3.11.15). See docs/APP_SETUP.md.
 numpy==2.4.6
 scipy==1.17.1
 pandas==3.0.5
