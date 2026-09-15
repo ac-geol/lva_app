@@ -116,9 +116,6 @@ class ExampleDeposit:
     ride on `samples` as ordinary columns, so they survive desurvey and scoring
     and reappear on `Dataset.active`. `truth` is the same data on its own for
     inspection. Use `orientation_error(out, ds.active)` to score a run.
-
-    Compositing must be OFF for the truth columns to survive: averaging
-    intervals drops columns it was not told to aggregate.
     """
     samples: pd.DataFrame
     collars: pd.DataFrame
@@ -298,7 +295,7 @@ def orientation_error(out: pd.DataFrame, active: pd.DataFrame) -> np.ndarray:
         raise KeyError(f"estimator output is missing {sorted(missing)}")
     if 'true_pole_x' not in active.columns:
         raise KeyError("`active` carries no truth columns -- was it prepared "
-                       "from a synthetic deposit, with compositing off?")
+                       "from a synthetic deposit?")
 
     t = active.set_index('src_index')
     o = out.set_index('src_index')

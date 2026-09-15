@@ -128,18 +128,6 @@ def test_load_points_drops_rows_with_no_coordinate():
     assert loaded[[COLS['easting'], COLS['northing'], COLS['elev']]].notna().all().all()
 
 
-def test_prepare_points_refuses_compositing():
-    """Composited grades with uncomposited coordinates is a silent wrong answer."""
-    cfg = example_cfg(composite_length_m=5.0)
-    dep = make_example_deposit(seed=0)
-    base = example_cfg()
-    ds = prepare(*load_tables(dep.samples, dep.collars, dep.surveys, base), base)
-
-    pts = load_points(_as_point_export(ds.des, base['score_columns']), base)
-    with pytest.raises(ValueError, match='composite'):
-        prepare_points(pts, cfg)
-
-
 def test_hole_paths_run_downhole_and_cover_every_hole():
     cfg = example_cfg()
     dep = make_example_deposit(seed=0)

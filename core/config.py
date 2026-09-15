@@ -13,21 +13,6 @@ DEFAULT_CFG = {
     'exclude_low_recovery': False,
     'low_recovery_col': 'LowRecovery_<=85pct',
 
-    # ---- support ----
-    # Downhole composite length in metres. None => use the assay intervals as
-    # supplied (MacPass: ~1.3 m mean). Compositing runs on raw grades before
-    # scoring and before the neighbourhood graph exists -- see core/compositing.
-    'composite_length_m': None,
-    # Gaps wider than this split a run instead of sitting inside a composite.
-    # None => composite_length_m.
-    'composite_gap_tolerance_m': None,
-    # A run's final cell shorter than this fraction of the composite length is
-    # merged into the preceding composite.
-    'composite_min_tail_fraction': 0.5,
-    # Drop composites whose assayed length falls below this fraction of the
-    # composite length. 0.0 disables the filter (honest default until calibrated).
-    'composite_min_coverage': 0.0,
-
     # ---- scoring ----
     'score_columns': ['Ag_ppm', 'Pb_pct', 'Zn_pct'],
     'log_transform_score': True,

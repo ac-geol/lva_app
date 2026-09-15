@@ -6,7 +6,6 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from .compositing import composite_downhole
 from .desurvey import desurvey_samples
 from .estimators import ESTIMATORS, field_to_orientations
 from .neighbors import build_edge_set
@@ -28,15 +27,6 @@ class Dataset:
 
 
 def prepare(samples, collars, surveys, cfg) -> Dataset:
-    # Compositing precedes desurvey and scoring: it is a downhole operation on
-    # raw grades, and the score's log1p means it cannot be applied afterwards.
-    samples = composite_downhole(
-        samples, cfg.get('composite_length_m'),
-        value_columns=cfg['score_columns'],
-        gap_tolerance_m=cfg.get('composite_gap_tolerance_m'),
-        min_tail_fraction=cfg.get('composite_min_tail_fraction', 0.5),
-        min_coverage=cfg.get('composite_min_coverage', 0.0))
-
     des, paths = desurvey_samples(samples, collars, surveys)
     des = build_mineralization_score(
         des, cfg['score_columns'],
@@ -107,17 +97,6 @@ def prepare_points(points: pd.DataFrame, cfg: dict) -> Dataset:
     selection, same Dataset -- so every estimator, validation statistic and
     diagnostic downstream cannot tell which route the coordinates arrived by.
     """
-    # Refused rather than ignored: compositing relays intervals downhole and
-    # moves their midpoints, but the coordinates in a point table belong to the
-    # intervals exactly as supplied. Compositing here would silently pair a
-    # composited grade with an uncomposited position.
-    if cfg.get('composite_length_m'):
-        raise ValueError(
-            "composite_length_m is not supported for desurveyed point input: "
-            "compositing moves interval midpoints, and this table's "
-            "coordinates belong to the intervals as supplied. Composite "
-            "upstream, in the software that holds the survey data.")
-
     des = points.copy()
     des[['mid_x', 'mid_y', 'mid_z']] = des[
         [COLS['easting'], COLS['northing'], COLS['elev']]].to_numpy(float)
