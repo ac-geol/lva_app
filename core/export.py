@@ -39,7 +39,7 @@ LEAPFROG_COLUMNS = [
 
 # Below this normalized linearity there is no in-plane axis worth reporting and
 # pitch is noise. lsq_gradient builds an essentially rank-one tensor and reads
-# ~1e-17 here; shape_pca returned 0.33-0.61 across MacPass.
+# ~1e-17 here; shape_pca returned 0.33-0.61 across the test property.
 MIN_LINEARITY_FOR_PITCH = 0.05
 
 

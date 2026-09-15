@@ -1,10 +1,10 @@
 """Judge each LVA method against surfaces derived from logged geology.
 
-The external check behind docs/METHOD_COMPARISON.md -- the one metric here that
-is not computed from the same graph it judges.
+The external check described in CLAUDE.md section 4 -- the one metric here
+that is not computed from the same graph it judges.
 
-Reference surfaces come from MPA_Interp: one contact point per hole per named
-stratigraphic unit, plane-fitted. Not oriented core, but real, independent of
+Reference surfaces come from the logged-interval table: one contact point per
+hole per named stratigraphic unit, plane-fitted. Not oriented core, but real, independent of
 the assay data, and free of downhole collinearity.
 """
 from __future__ import annotations
@@ -25,6 +25,13 @@ from core.neighbors import build_edge_set
 from core.pipeline import prepare
 from core.schema import COLS
 
+# Bring your own tables. `data/` is gitignored for exactly this; edit these
+# paths to match your filenames.
+SAMPLES = 'data/samples.csv'
+COLLARS = 'data/collars.csv'
+SURVEYS = 'data/surveys.csv'
+INTERP = 'data/logged_intervals.csv'
+
 # Same panel set as scripts/compare_methods.py: two methods, then the
 # drill-pattern reference (shape-PCA on grade-blind weights).
 METHODS = ['shape_pca', 'lsq_gradient']
@@ -34,10 +41,8 @@ PANELS = METHODS + [REFERENCE]
 
 def main():
     cfg = make_cfg()
-    samples, collars, surveys = load_tables(
-        'MPA_Samples_BD_20240227.csv', 'MPA_Collar_20240227.csv',
-        'MPA_Survey_20240227.csv', cfg)
-    interp = pd.read_csv('MPA_Interp_20240227.csv')
+    samples, collars, surveys = load_tables(SAMPLES, COLLARS, SURVEYS, cfg)
+    interp = pd.read_csv(INTERP)
 
     contacts = extract_contacts(interp, collars, surveys)
     planes = fit_contact_planes(contacts, min_holes=8)

@@ -115,7 +115,7 @@ def test_normalized_metrics_are_on_a_common_scale():
     It is what keeps a future estimator whose tensor cannot reach a perfect
     eigenvalue ratio comparable against them, so it stays under test. The 2/3
     and 1/2 ceilings used here are the analytic saturation values of a gradient
-    structure tensor under isotropic neighbours -- see docs/METHOD_COMPARISON.md.
+    structure tensor under isotropic neighbours -- see CLAUDE.md section 3.
     """
     tf, a, _, _ = _diag_field('major', TRUE_POLE, ratio=(1 / 5, 1 / 15, 1 / 15))
     tf.planarity_ceiling = 2.0 / 3.0
@@ -186,7 +186,7 @@ def test_lsq_gradient_beats_naive_tensor_averaging_on_anisotropic_sampling():
     the gradient inverts it away. The averaged tensor is built inline here
     rather than imported: it is the method being beaten, not a shipped
     estimator, and this test is the record of why it is not shipped.
-    See docs/METHOD_COMPARISON.md.
+    See CLAUDE.md section 3.
     """
     from core.estimators import lsq_gradient
 

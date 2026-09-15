@@ -27,7 +27,7 @@
   #  method comparison compares. Both estimators here top out at 1.0, so     #
   #  the machinery is currently dormant -- it is retained because it is the  #
   #  only thing that keeps a future estimator honest against these two.      #
-  #  See docs/METHOD_COMPARISON.md for the estimators this replaced.         #
+  #  See CLAUDE.md section 3 for the estimators this replaced.               #
   ############################################################################
 """
 from __future__ import annotations
@@ -79,7 +79,7 @@ def shape_pca(edges: EdgeSet, coords: np.ndarray, scores: np.ndarray,
     """Weighted covariance of neighbour POSITIONS -- the notebook's estimator.
 
     Measures the shape of the sampled point cloud. Kept as the reference
-    method: see README section 2 and docs/METHOD_COMPARISON.md for why it
+    method: see CLAUDE.md section 3 for why it
     reports the drill pattern rather than the geology.
     """
     n = edges.n_nodes
@@ -108,8 +108,8 @@ def lsq_gradient(edges: EdgeSet, coords: np.ndarray, scores: np.ndarray,
     are ISOTROPIC. Drillhole sampling is the opposite of isotropic: which
     directions exist at all is decided by the drill programme, so the direction
     of largest observed contrast is partly a statement about where the other
-    holes are. On MacPass that costs ~50 degrees even on a synthetic, noise-free
-    lens (see docs/METHOD_COMPARISON.md).
+    holes are. On the test property that costs ~50 degrees even on a noise-free
+    lens (see CLAUDE.md section 3).
 
     Solving instead of averaging removes it. Minimizing
 

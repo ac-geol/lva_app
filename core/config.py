@@ -35,9 +35,8 @@ DEFAULT_CFG = {
     # 'shape_pca' (default) | 'lsq_gradient'
     # shape_pca ships as the default on the evidence available: it wins against
     # synthetic ground truth (15.6 deg vs 21.9) and against logged contacts
-    # (21.5 vs 29.2). docs/TODO.md section 3 records the one experiment that
-    # could overturn that -- a single-azimuth drill programme, still untried --
-    # and docs/METHOD_COMPARISON.md still argues the superseded position.
+    # (21.5 vs 29.2). CLAUDE.md section 5 records the one experiment that
+    # could overturn that -- a single-azimuth drill programme, still untried.
     'estimator': 'shape_pca',
 
     # lsq_gradient: ridge on the normal equations, relative to each node's own

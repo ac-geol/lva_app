@@ -128,7 +128,7 @@ def test_generation_is_deterministic():
 
 
 def test_coordinates_are_obviously_synthetic():
-    """Nothing here may be mistakeable for a real survey. See docs/TODO.md."""
+    """Nothing here may be mistakeable for a real survey. See CLAUDE.md section 2."""
     dep = make_example_deposit(seed=0)
     e = dep.collars[COLS['easting']]
     n = dep.collars[COLS['northing']]

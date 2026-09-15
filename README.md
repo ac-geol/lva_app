@@ -7,8 +7,10 @@ The intended use is **LVA angle coding for grade estimation**: giving a search
 ellipsoid a local orientation that follows the mineralisation rather than a
 single global direction.
 
-Status: **engine working and tested. A browser interface is built and under
-test** on the `feature/browser-app` branch.
+Status: **engine and browser app working and tested.**
+
+**[Setup and usage guide →](docs/APP_SETUP.md)** — start here. It assumes no
+Python, and covers everything from installing the tools to reading the result.
 
 ---
 
@@ -16,22 +18,22 @@ test** on the `feature/browser-app` branch.
 
 | path | what it is |
 |---|---|
+| `app/` | A browser interface — runs the engine on your own machine, with no server and no data leaving the browser. |
 | `core/` | The engine. Pure numpy/scipy/pandas — no plotting, no file paths. |
-| `app/` | A browser interface — runs the engine locally in the browser, with no server and no data leaving the machine. |
-| `scripts/` | Runnable comparisons and the app build. |
+| `scripts/` | The app build, and runnable method comparisons. |
 | `viz/` | Stereonets. Deliberately outside `core/`. |
-| `tests/` | 88 tests. Self-contained — they need no data. |
-| `docs/` | Setup, results and reasoning. |
+| `tests/` | 62 tests. Self-contained — they need no data. |
 
 ## Quick start
 
 ```bash
 uv venv --python 3.11 .venv
 uv pip install --python .venv/bin/python -r requirements.txt
-.venv/bin/python -m pytest tests/ -q          # 88 tests, no data required
+.venv/bin/python -m pytest tests/ -q          # 62 tests, no data required
 ```
 
-To set up and run the browser app, see [`docs/APP_SETUP.md`](docs/APP_SETUP.md).
+Then follow [`docs/APP_SETUP.md`](docs/APP_SETUP.md) to download the browser
+runtime and start the app.
 
 ## Methods
 
@@ -48,32 +50,32 @@ whether a result is measuring rock or measuring drilling.
 
 ## Data
 
-**This repo carries no drillhole data.** `.gitignore` is deny-by-default: every
-`*.csv` and `data/` is ignored, with explicit exceptions only for aggregate
-tables that hold angles, counts and timings — no coordinates, no hole IDs.
+**This repo carries no drillhole data**, and none is ever committed —
+`.gitignore` ignores every `*.csv` and `data/` outright. Bring your own.
 
-Bring your own. The app takes one desurveyed CSV; the scripts take the three
-raw tables.
+The app takes **one CSV: one row per sample interval, already desurveyed**, with
+hole ID, from/to, X/Y/Z and one assay column. Column names do not have to match
+anything; the app shows you what it matched and lets you correct it.
 
-## Documentation
+## Running the comparison scripts
 
-| | |
-|---|---|
-| [`docs/APP_SETUP.md`](docs/APP_SETUP.md) | Setting up and using the browser app. Start here. |
-| [`docs/SETUP.md`](docs/SETUP.md) | Running the engine on another machine. |
-| [`docs/METHOD_COMPARISON.md`](docs/METHOD_COMPARISON.md) | Which method ships and why. |
-| [`docs/LEAPFROG_CHECK.md`](docs/LEAPFROG_CHECK.md) | Verifying the export angles against Leapfrog. |
-| [`docs/COMPOSITING.md`](docs/COMPOSITING.md) | Downhole compositing, and why it is out of scope. |
-| [`docs/BACKGROUND.md`](docs/BACKGROUND.md) | The fuller reasoning behind the current design. |
-| [`docs/TODO.md`](docs/TODO.md) | Open items and parked decisions. |
+For anyone working on the engine rather than using the app. These take the raw
+three-table export — samples, collars and surveys — plus logged intervals for
+the contact check, and their paths are constants at the top of each script:
 
-## Known open items
+```bash
+.venv/bin/python scripts/compare_methods.py --synthetic   # no data needed
+.venv/bin/python scripts/compare_methods.py               # your own tables
+.venv/bin/python scripts/validate_contacts.py             # the external check
+.venv/bin/python scripts/tune_lsq.py                      # parameter sweeps
+```
 
-- **Exported pitch is not yet verified** against Leapfrog. Dip and dip azimuth
-  are. See [`docs/LEAPFROG_CHECK.md`](docs/LEAPFROG_CHECK.md).
-- **Which method is right is not fully settled.** `shape_pca` is more accurate
-  on the evidence available but closely resembles the drill pattern; the
-  experiment that would decide it is in [`docs/TODO.md`](docs/TODO.md) §3.
-- **No measured structural data** exists for the test property, so accuracy is
-  judged against logged contact surfaces and a synthetic deposit with a known
-  answer.
+`--synthetic` builds a folded deposit whose true orientation is known at every
+sample, so a fresh clone can produce a full comparison with nothing to supply.
+
+## Reasoning and open items
+
+[`CLAUDE.md`](CLAUDE.md) — what was decided and why, what is parked, and what is
+still open. [`docs/LEAPFROG_CHECK.md`](docs/LEAPFROG_CHECK.md) is the one
+verification still outstanding: **exported pitch is not yet confirmed** against
+Leapfrog, though dip and dip azimuth are.

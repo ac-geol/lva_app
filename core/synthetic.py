@@ -21,7 +21,7 @@ a mineralized shell of constant thickness that never pinches or splits. A
 method can do well here and still do poorly on a real deposit.
 
 Use it as a demo, a regression target, and a bias check. Do **not** select or
-tune a method on it -- see `docs/METHOD_COMPARISON.md` section 4 for what
+tune a method on it -- see `CLAUDE.md` section 4 for what
 happened the last time a convenient internal metric drove selection.
 
 The model

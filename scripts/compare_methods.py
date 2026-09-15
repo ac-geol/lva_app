@@ -48,10 +48,12 @@ from core.synthetic import example_cfg, make_example_deposit, orientation_error
 from core.validation import (coherence_null, neighbor_agreement,
                              split_half_stability)
 
+# Bring your own tables. `data/` is gitignored for exactly this; edit these
+# paths to match your filenames, or run with --synthetic and supply nothing.
 DATA = {
-    'samples': 'MPA_Samples_BD_20240227.csv',
-    'collars': 'MPA_Collar_20240227.csv',
-    'surveys': 'MPA_Survey_20240227.csv',
+    'samples': 'data/samples.csv',
+    'collars': 'data/collars.csv',
+    'surveys': 'data/surveys.csv',
 }
 
 # The two user-facing choices, then the reference. Order drives the figure.

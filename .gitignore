@@ -2,20 +2,14 @@
 # DATA: deny by default.
 #
 # Nothing carrying coordinates, hole IDs or grades gets committed on this
-# project -- raw tables AND derived files. The safe direction is the default:
-# every CSV is ignored, and the few aggregate-only outputs are re-admitted by
-# explicit exception below. A new data file is never staged by accident.
+# project -- raw tables AND derived files. The repo is public, so the safe
+# direction is the only direction: every CSV is ignored, with no exceptions,
+# and a new data file is never staged by accident. See CLAUDE.md section 2.
 # ---------------------------------------------------------------------------
 *.csv
 
 # Drop your own tables here -- never tracked.
 data/
-
-# Aggregate-only outputs: angles, counts, timings. No coordinates, no hole IDs.
-# These are the evidence behind docs/METHOD_COMPARISON.md, so they stay.
-!out/method_comparison_summary.csv
-!out/lsq_tuning.csv
-!out/contact_validation.csv
 
 # Notebook prototype: cell outputs carry hole IDs, UTM coordinates and
 # georeferenced figures from a second, non-public deposit. Kept local only.
@@ -38,8 +32,8 @@ __pycache__/
 # OS noise
 .DS_Store
 
-# Synthetic demo outputs -- regenerate with scripts/compare_methods.py --synthetic
-out/synthetic_*
+# Script outputs -- figures and result tables, all regenerated on demand.
+out/
 
 # Browser app build artifacts -- regenerate with scripts/build_app.py.
 # (app/sample_synthetic.csv is already covered by the blanket *.csv rule.)

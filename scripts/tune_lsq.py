@@ -58,12 +58,18 @@ def stability(coords, scores, lengths, hole_code, cfg, iters, alpha, seed=0):
                                               b.loc[both, cols].to_numpy())))
 
 
+# Bring your own tables. `data/` is gitignored for exactly this; edit these
+# paths to match your filenames.
+SAMPLES = 'data/samples.csv'
+COLLARS = 'data/collars.csv'
+SURVEYS = 'data/surveys.csv'
+INTERP = 'data/logged_intervals.csv'
+
+
 def main():
     cfg0 = make_cfg()
-    s, c, v = load_tables('MPA_Samples_BD_20240227.csv',
-                          'MPA_Collar_20240227.csv',
-                          'MPA_Survey_20240227.csv', cfg0)
-    contacts = extract_contacts(pd.read_csv('MPA_Interp_20240227.csv'), c, v)
+    s, c, v = load_tables(SAMPLES, COLLARS, SURVEYS, cfg0)
+    contacts = extract_contacts(pd.read_csv(INTERP), c, v)
     planes = fit_contact_planes(contacts, min_holes=8)
     ds = prepare(s, c, v, cfg0)
     xyz = ds.active[['mid_x', 'mid_y', 'mid_z']].reset_index(drop=True)
